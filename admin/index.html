@@ -1,0 +1,551 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin — InfuMedz</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/css/app.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231F3C68'/%3E%3Ctext x='16' y='22' font-family='system-ui' font-size='17' font-weight='900' fill='white' text-anchor='middle'%3EA%3C/text%3E%3C/svg%3E">
+</head>
+<body class="bg-canvas">
+
+<!-- ── Sign-in gate ─────────────────────────────────────── -->
+<div data-gate class="grid min-h-screen place-items-center px-4">
+  <div class="w-full max-w-sm">
+    <div class="mb-6 text-center">
+      <span class="mx-auto grid h-12 w-12 place-items-center rounded-xl2 bg-navy text-xl font-black text-white">A</span>
+      <h1 class="mt-4 text-2xl">Admin sign in</h1>
+      <p class="prose-brand mt-1 text-sm">Use your InfuMedz account credentials.</p>
+    </div>
+    <form class="card p-6" data-gate-form novalidate>
+      <div>
+        <label class="label" for="ad-email">Email</label>
+        <input id="ad-email" class="field" type="email" autocomplete="username" required placeholder="you@example.com">
+      </div>
+      <div class="mt-4">
+        <label class="label" for="ad-pw">Password</label>
+        <input id="ad-pw" class="field" type="password" autocomplete="current-password" required placeholder="Your password">
+      </div>
+      <button class="btn-primary mt-6 w-full" type="submit" data-gate-submit>Sign in</button>
+      <p class="mt-4 text-center text-xs text-ink-muted">
+        This session ends when you close the tab.
+      </p>
+    </form>
+    <p class="mt-5 text-center text-sm">
+      <a href="../index.html" class="text-ink-muted hover:text-primary">&larr; Back to website</a>
+    </p>
+  </div>
+</div>
+
+<!-- ── Console ──────────────────────────────────────────── -->
+<div data-console class="hidden min-h-screen lg:grid lg:grid-cols-[232px_1fr]">
+
+  <!-- Sidebar -->
+  <aside class="border-r border-line bg-white lg:sticky lg:top-0 lg:h-screen">
+    <div class="flex h-16 items-center gap-2.5 border-b border-line px-5">
+      <span class="grid h-8 w-8 place-items-center rounded-xl2 bg-navy text-sm font-black text-white">A</span>
+      <span class="font-black tracking-tight text-navy">Admin</span>
+    </div>
+    <nav class="space-y-0.5 p-3" data-tabs aria-label="Admin sections"></nav>
+    <div class="border-t border-line p-3">
+      <p class="truncate px-3 pb-2 text-xs text-ink-muted" data-whoami></p>
+      <a href="../index.html" class="block rounded-lg px-3 py-2 text-sm text-ink-soft hover:bg-chip hover:text-primary">View website</a>
+      <button class="block w-full rounded-lg px-3 py-2 text-left text-sm text-bad hover:bg-bad/5" data-signout>Sign out</button>
+    </div>
+  </aside>
+
+  <!-- Panel -->
+  <main class="min-w-0">
+    <header class="sticky top-0 z-10 flex h-16 items-center justify-between gap-4 border-b border-line bg-white/90 px-5 backdrop-blur">
+      <h1 class="text-lg" data-panel-title>Dashboard</h1>
+      <button class="btn-ghost btn-sm" data-refresh>Refresh</button>
+    </header>
+    <div class="p-5" data-panel></div>
+  </main>
+</div>
+
+<script type="module">
+import { api } from '../assets/js/api.js';
+import { session } from '../assets/js/session.js';
+import { fmt, toast, stars } from '../assets/js/ui.js';
+
+const $  = (s, r) => (r || document).querySelector(s);
+const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+const H  = () => session.adminHeaders;
+
+const TABS = [
+  { id: 'dashboard', label: 'Dashboard' },
+  { id: 'courses',   label: 'Courses' },
+  { id: 'books',     label: 'Books' },
+  { id: 'reviews',   label: 'Reviews' },
+  { id: 'tickets',   label: 'Support' },
+  { id: 'users',     label: 'Users' },
+  { id: 'notify',    label: 'Notifications' },
+];
+
+let current = location.hash.replace('#', '') || 'dashboard';
+const cache = {};
+
+/* ── gate ──────────────────────────────────────────────── */
+
+function showConsole() {
+  $('[data-gate]').classList.add('hidden');
+  $('[data-console]').classList.remove('hidden');
+  const a = session.admin;
+  $('[data-whoami]').textContent = a ? a.email : '';
+  renderTabs();
+  open(current);
+}
+
+$('[data-gate-form]').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = $('[data-gate-submit]');
+  btn.disabled = true; btn.textContent = 'Signing in…';
+  try {
+    await session.adminLogin($('#ad-email').value.trim(), $('#ad-pw').value);
+    showConsole();
+  } catch (err) {
+    btn.disabled = false; btn.textContent = 'Sign in';
+    toast(err.message || 'Could not sign in.', 'error');
+  }
+});
+
+$('[data-signout]').addEventListener('click', () => {
+  session.adminLogout();
+  location.reload();
+});
+
+/* ── nav ───────────────────────────────────────────────── */
+
+function renderTabs() {
+  $('[data-tabs]').innerHTML = TABS.map((t) =>
+    '<button data-tab="' + t.id + '" class="block w-full rounded-lg px-3 py-2 text-left text-sm font-medium">' +
+      t.label + '</button>').join('');
+  $$('[data-tab]').forEach((b) => b.addEventListener('click', () => open(b.dataset.tab)));
+  paintTabs();
+}
+
+function paintTabs() {
+  $$('[data-tab]').forEach((b) => {
+    const on = b.dataset.tab === current;
+    b.className = 'block w-full rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors ' +
+      (on ? 'bg-chip text-primary' : 'text-ink-soft hover:bg-canvas hover:text-navy');
+  });
+}
+
+async function open(tab) {
+  current = tab;
+  history.replaceState(null, '', '#' + tab);
+  paintTabs();
+  $('[data-panel-title]').textContent = (TABS.find((t) => t.id === tab) || {}).label || 'Admin';
+  $('[data-panel]').innerHTML = '<div class="space-y-3"><div class="sk h-24"></div><div class="sk h-24"></div></div>';
+  try {
+    await VIEWS[tab]();
+  } catch (e) {
+    $('[data-panel]').innerHTML = card(
+      '<p class="text-sm font-semibold text-bad">Could not load this section</p>' +
+      '<p class="prose-brand mt-1 text-sm">' + fmt.esc(e.message || 'Request failed.') + '</p>' +
+      (e.status === 401
+        ? '<p class="prose-brand mt-2 text-sm">Your admin session may have expired. ' +
+          '<button class="font-semibold text-primary hover:underline" onclick="location.reload()">Sign in again</button></p>'
+        : ''));
+  }
+}
+
+$('[data-refresh]').addEventListener('click', () => { delete cache[current]; open(current); });
+
+/* ── small helpers ─────────────────────────────────────── */
+
+const card = (inner, cls) => '<div class="card p-5 ' + (cls || '') + '">' + inner + '</div>';
+
+function table(headers, rows) {
+  if (!rows.length) return '<p class="px-4 py-10 text-center text-sm text-ink-muted">Nothing here yet.</p>';
+  return '' +
+    '<div class="overflow-x-auto">' +
+      '<table class="w-full text-left text-sm">' +
+        '<thead class="border-b border-line text-xs uppercase tracking-wider text-ink-muted">' +
+          '<tr>' + headers.map((h) => '<th class="px-4 py-3 font-semibold">' + h + '</th>').join('') + '</tr>' +
+        '</thead>' +
+        '<tbody class="divide-y divide-line">' + rows.join('') + '</tbody>' +
+      '</table>' +
+    '</div>';
+}
+
+const statTile = (label, value, tone) =>
+  '<div class="card p-5">' +
+    '<p class="text-xs font-semibold uppercase tracking-wider text-ink-muted">' + fmt.esc(label) + '</p>' +
+    '<p class="mt-2 text-3xl font-black ' + (tone || 'text-navy') + '">' + value + '</p>' +
+  '</div>';
+
+/* ── panels ────────────────────────────────────────────── */
+
+const VIEWS = {
+
+  async dashboard() {
+    const [d, courses, books] = await Promise.all([
+      api.admin.dashboard(H()).catch(() => ({})),
+      api.courses().catch(() => []),
+      api.books().catch(() => []),
+    ]);
+
+    // The dashboard endpoint's keys vary, so read defensively and fall back
+    // to figures we can derive from the catalogue.
+    const pick = (...keys) => {
+      for (const k of keys) if (d && d[k] !== undefined && d[k] !== null) return d[k];
+      return null;
+    };
+    const revenue = pick('total_revenue', 'revenue', 'totalRevenue');
+    const users   = pick('total_users', 'users', 'user_count');
+    const orders  = pick('total_orders', 'orders', 'payments');
+
+    const lectures = courses.reduce((n, c) => n + ((c.videos || []).length), 0);
+    const pdfs     = books.reduce((n, b) => n + ((b.pdfs || []).length), 0);
+
+    $('[data-panel]').innerHTML =
+      '<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">' +
+        statTile('Revenue', revenue !== null ? fmt.price(revenue) : '—', 'text-ok') +
+        statTile('Customers', users !== null ? users : '—') +
+        statTile('Orders', orders !== null ? orders : '—') +
+        statTile('Catalogue', courses.length + books.length) +
+      '</div>' +
+      '<div class="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">' +
+        statTile('Courses', courses.length) +
+        statTile('Lectures', lectures) +
+        statTile('Books', books.length) +
+        statTile('PDFs', pdfs) +
+      '</div>' +
+      '<div class="mt-6">' +
+        card('<h2 class="text-base">Most enrolled</h2>' +
+          '<div class="mt-4 space-y-2">' +
+          courses.concat(books)
+            .sort((a, b) => (b.buyers_count || 0) - (a.buyers_count || 0))
+            .slice(0, 8)
+            .map((i) =>
+              '<div class="flex items-center justify-between gap-4 border-b border-line pb-2 last:border-0">' +
+                '<span class="min-w-0 truncate text-sm text-navy">' + fmt.esc(i.title) + '</span>' +
+                '<span class="shrink-0 text-sm font-semibold text-primary">' + (i.buyers_count || 0) + '</span>' +
+              '</div>').join('') +
+          '</div>') +
+      '</div>';
+  },
+
+  async courses() {
+    const rows = await api.courses();
+    $('[data-panel]').innerHTML =
+      '<div class="mb-4 flex justify-end"><button class="btn-primary btn-sm" data-new-course>+ New course</button></div>' +
+      '<div class="card overflow-hidden">' +
+        table(['Title', 'Category', 'Price', 'Lectures', 'Buyers', ''],
+          rows.map((c) =>
+            '<tr>' +
+              '<td class="px-4 py-3"><a href="../course.html?id=' + encodeURIComponent(c.id) + '" target="_blank" rel="noopener" ' +
+                 'class="font-medium text-navy hover:text-primary">' + fmt.esc(c.title) + '</a></td>' +
+              '<td class="px-4 py-3 text-ink-soft">' + fmt.esc(c.category_name || '—') + '</td>' +
+              '<td class="px-4 py-3 font-semibold text-navy">' + fmt.price(c.price) + '</td>' +
+              '<td class="px-4 py-3 text-ink-soft">' + ((c.videos || []).length) + '</td>' +
+              '<td class="px-4 py-3 text-ink-soft">' + (c.buyers_count || 0) + '</td>' +
+              '<td class="px-4 py-3 text-right">' +
+                '<button class="text-sm font-medium text-bad hover:underline" data-del-course="' + fmt.esc(c.id) +
+                '" data-title="' + fmt.esc(c.title) + '">Delete</button></td>' +
+            '</tr>')) +
+      '</div>';
+
+    $$('[data-del-course]').forEach((b) => b.addEventListener('click', async () => {
+      // Deleting a course removes paid content, so make the person type the
+      // title. A single "Are you sure?" is too easy to click through.
+      const t = b.dataset.title;
+      const typed = prompt('This permanently deletes "' + t + '" and its lectures.\n\nType the course title to confirm:');
+      if (typed === null) return;
+      if (typed.trim() !== t.trim()) return toast('Title did not match — nothing deleted.', 'warn');
+      try {
+        await api.admin.deleteCourse(b.dataset.delCourse, H());
+        toast('Course deleted.', 'success');
+        open('courses');
+      } catch (e) { toast(e.message || 'Delete failed.', 'error'); }
+    }));
+
+    $('[data-new-course]').addEventListener('click', () => contentForm('course'));
+  },
+
+  async books() {
+    const rows = await api.books();
+    $('[data-panel]').innerHTML =
+      '<div class="mb-4 flex justify-end"><button class="btn-primary btn-sm" data-new-book>+ New book</button></div>' +
+      '<div class="card overflow-hidden">' +
+        table(['Title', 'Category', 'Price', 'PDFs', 'Buyers', ''],
+          rows.map((b) =>
+            '<tr>' +
+              '<td class="px-4 py-3"><a href="../book.html?id=' + encodeURIComponent(b.id) + '" target="_blank" rel="noopener" ' +
+                 'class="font-medium text-navy hover:text-primary">' + fmt.esc(b.title) + '</a></td>' +
+              '<td class="px-4 py-3 text-ink-soft">' + fmt.esc(b.category_name || '—') + '</td>' +
+              '<td class="px-4 py-3 font-semibold text-navy">' + fmt.price(b.price) + '</td>' +
+              '<td class="px-4 py-3 text-ink-soft">' + ((b.pdfs || []).length) + '</td>' +
+              '<td class="px-4 py-3 text-ink-soft">' + (b.buyers_count || 0) + '</td>' +
+              '<td class="px-4 py-3 text-right">' +
+                '<button class="text-sm font-medium text-bad hover:underline" data-del-book="' + fmt.esc(b.id) +
+                '" data-title="' + fmt.esc(b.title) + '">Delete</button></td>' +
+            '</tr>')) +
+      '</div>';
+
+    $$('[data-del-book]').forEach((b) => b.addEventListener('click', async () => {
+      const t = b.dataset.title;
+      const typed = prompt('This permanently deletes "' + t + '" and its PDFs.\n\nType the book title to confirm:');
+      if (typed === null) return;
+      if (typed.trim() !== t.trim()) return toast('Title did not match — nothing deleted.', 'warn');
+      try {
+        await api.admin.deleteBook(b.dataset.delBook, H());
+        toast('Book deleted.', 'success');
+        open('books');
+      } catch (e) { toast(e.message || 'Delete failed.', 'error'); }
+    }));
+
+    $('[data-new-book]').addEventListener('click', () => contentForm('book'));
+  },
+
+  async reviews() {
+    const rows = await api.admin.reviews(H());
+    const list = Array.isArray(rows) ? rows : (rows.reviews || []);
+    $('[data-panel]').innerHTML = list.length
+      ? '<div class="space-y-3">' + list.map((r, i) =>
+          '<div class="card p-5">' +
+            '<div class="flex flex-wrap items-center gap-2">' +
+              '<span class="badge-cat">' + fmt.esc(r.item_type || 'review') + '</span>' +
+              '<span class="text-sm font-semibold text-navy">' + fmt.esc(r.item_title || '') + '</span>' +
+              stars(r.rating, 'h-3.5 w-3.5') +
+              '<span class="text-xs text-ink-muted">' + fmt.esc(r.user_name || '') + ' · ' + fmt.ago(r.created_at) + '</span>' +
+            '</div>' +
+            (r.comment ? '<p class="prose-brand mt-2 text-sm">' + fmt.esc(r.comment) + '</p>' : '') +
+            (r.admin_reply
+              ? '<div class="mt-3 rounded-xl2 border border-line bg-canvas p-3">' +
+                  '<p class="text-xs font-bold text-primary">Your reply · ' + fmt.ago(r.admin_reply_at) + '</p>' +
+                  '<p class="prose-brand mt-1 text-sm">' + fmt.esc(r.admin_reply) + '</p></div>'
+              : '<div class="mt-3 flex gap-2">' +
+                  '<input class="field" placeholder="Reply publicly…" data-reply-input="' + i + '">' +
+                  '<button class="btn-primary btn-sm shrink-0" data-reply="' + i + '">Reply</button></div>') +
+          '</div>').join('') + '</div>'
+      : card('<p class="text-sm text-ink-muted">No reviews yet.</p>');
+
+    $$('[data-reply]').forEach((b) => b.addEventListener('click', async () => {
+      const i = b.dataset.reply;
+      const r = list[i];
+      const text = ($('[data-reply-input="' + i + '"]').value || '').trim();
+      if (!text) return toast('Write a reply first.', 'warn');
+      b.disabled = true;
+      try {
+        const payload = { review_id: r.id, reply: text };
+        if ((r.item_type || '').toLowerCase().indexOf('book') >= 0) {
+          await api.admin.replyBookReview(payload, H());
+        } else {
+          await api.admin.replyCourseReview(payload, H());
+        }
+        toast('Reply posted.', 'success');
+        open('reviews');
+      } catch (e) { b.disabled = false; toast(e.message || 'Could not post reply.', 'error'); }
+    }));
+  },
+
+  async tickets() {
+    const rows = await api.admin.tickets(H());
+    const list = Array.isArray(rows) ? rows : (rows.tickets || []);
+    $('[data-panel]').innerHTML = list.length
+      ? '<div class="space-y-3">' + list.map((t, i) =>
+          '<div class="card p-5">' +
+            '<div class="flex flex-wrap items-center justify-between gap-2">' +
+              '<div class="flex flex-wrap items-center gap-2">' +
+                '<span class="text-sm font-semibold text-navy">' + fmt.esc(t.subject || t.title || 'Ticket') + '</span>' +
+                '<span class="badge ' + (String(t.status).toUpperCase() === 'OPEN' ? 'bg-warn/15 text-warn' : 'bg-ok/10 text-ok') + '">' +
+                  fmt.esc(t.status || '—') + '</span>' +
+              '</div>' +
+              '<span class="text-xs text-ink-muted">' + fmt.ago(t.created_at) + '</span>' +
+            '</div>' +
+            (t.message ? '<p class="prose-brand mt-2 text-sm">' + fmt.esc(t.message) + '</p>' : '') +
+            (t.admin_reply
+              ? '<div class="mt-3 rounded-xl2 border border-line bg-canvas p-3">' +
+                  '<p class="text-xs font-bold text-primary">Your reply</p>' +
+                  '<p class="prose-brand mt-1 text-sm">' + fmt.esc(t.admin_reply) + '</p></div>'
+              : '<div class="mt-3 flex gap-2">' +
+                  '<input class="field" placeholder="Reply to this ticket…" data-tk-input="' + i + '">' +
+                  '<button class="btn-primary btn-sm shrink-0" data-tk="' + i + '">Send</button></div>') +
+          '</div>').join('') + '</div>'
+      : card('<p class="text-sm text-ink-muted">No support tickets.</p>');
+
+    $$('[data-tk]').forEach((b) => b.addEventListener('click', async () => {
+      const i = b.dataset.tk;
+      const text = ($('[data-tk-input="' + i + '"]').value || '').trim();
+      if (!text) return toast('Write a reply first.', 'warn');
+      b.disabled = true;
+      try {
+        await api.admin.replyTicket({ ticket_id: list[i].id, reply: text }, H());
+        toast('Reply sent.', 'success');
+        open('tickets');
+      } catch (e) { b.disabled = false; toast(e.message || 'Could not send reply.', 'error'); }
+    }));
+  },
+
+  async users() {
+    const rows = await api.admin.users(H());
+    const list = Array.isArray(rows) ? rows : (rows.users || []);
+    $('[data-panel]').innerHTML =
+      '<div class="mb-4"><input class="field max-w-sm" type="search" placeholder="Search name, email or phone…" data-user-q></div>' +
+      '<div class="card overflow-hidden" data-user-table></div>';
+
+    const draw = (q) => {
+      const term = (q || '').toLowerCase();
+      const filtered = !term ? list : list.filter((u) =>
+        ((u.name || '') + ' ' + (u.email || '') + ' ' + (u.phone || '')).toLowerCase().includes(term));
+      $('[data-user-table]').innerHTML = table(['Name', 'Email', 'Phone'],
+        filtered.map((u) =>
+          '<tr>' +
+            '<td class="px-4 py-3"><span class="flex items-center gap-2">' +
+              '<span class="grid h-7 w-7 place-items-center rounded-full bg-brand-grad text-[10px] font-bold text-white">' +
+                fmt.esc(fmt.initials(u.name)) + '</span>' +
+              '<span class="font-medium text-navy">' + fmt.esc(u.name || '—') + '</span></span></td>' +
+            '<td class="px-4 py-3 text-ink-soft">' + fmt.esc(u.email || '—') + '</td>' +
+            '<td class="px-4 py-3 text-ink-soft">' + fmt.esc(u.phone || '—') + '</td>' +
+          '</tr>'));
+    };
+    draw('');
+    $('[data-user-q]').addEventListener('input', (e) => draw(e.target.value));
+  },
+
+  async notify() {
+    $('[data-panel]').innerHTML =
+      '<div class="grid gap-4 lg:grid-cols-2">' +
+        card('<h2 class="text-base">Announcement</h2>' +
+          '<p class="prose-brand mt-1 text-sm">Sends a push notification to everyone with the app installed.</p>' +
+          '<div class="mt-4"><label class="label" for="an-title">Title</label>' +
+            '<input id="an-title" class="field" placeholder="New lectures added"></div>' +
+          '<div class="mt-3"><label class="label" for="an-body">Message</label>' +
+            '<textarea id="an-body" class="field" rows="3" placeholder="Three new echo lectures are now live."></textarea></div>' +
+          '<button class="btn-primary mt-4 w-full" data-announce>Send to everyone</button>') +
+        card('<h2 class="text-base">Grant access</h2>' +
+          '<p class="prose-brand mt-1 text-sm">Gives a customer a course or book without a payment — use for ' +
+            'manual purchases or to fix a stuck order.</p>' +
+          '<div class="mt-4"><label class="label" for="as-email">Customer email</label>' +
+            '<input id="as-email" class="field" placeholder="customer@example.com"></div>' +
+          '<div class="mt-3"><label class="label" for="as-type">Type</label>' +
+            '<select id="as-type" class="field"><option value="course">Course</option><option value="book">Book</option></select></div>' +
+          '<div class="mt-3"><label class="label" for="as-item">Item</label>' +
+            '<select id="as-item" class="field"></select></div>' +
+          '<button class="btn-primary mt-4 w-full" data-assign>Grant access</button>') +
+      '</div>';
+
+    const [courses, books] = await Promise.all([api.courses().catch(() => []), api.books().catch(() => [])]);
+    const fillItems = () => {
+      const kind = $('#as-type').value;
+      const rows = kind === 'course' ? courses : books;
+      $('#as-item').innerHTML = rows.map((r) =>
+        '<option value="' + fmt.esc(r.id) + '">' + fmt.esc(r.title) + ' — ' + fmt.price(r.price) + '</option>').join('');
+    };
+    fillItems();
+    $('#as-type').addEventListener('change', fillItems);
+
+    $('[data-announce]').addEventListener('click', async (e) => {
+      const title = $('#an-title').value.trim();
+      const body  = $('#an-body').value.trim();
+      if (!title || !body) return toast('Enter a title and a message.', 'warn');
+      if (!confirm('Send "' + title + '" to every user with the app installed?')) return;
+      e.target.disabled = true;
+      try {
+        await api.admin.notifyAnnounce({ title, body }, H());
+        toast('Announcement sent.', 'success');
+        $('#an-title').value = ''; $('#an-body').value = '';
+      } catch (err) { toast(err.message || 'Could not send.', 'error'); }
+      e.target.disabled = false;
+    });
+
+    $('[data-assign]').addEventListener('click', async (e) => {
+      const email = $('#as-email').value.trim();
+      const type  = $('#as-type').value;
+      const item  = $('#as-item').value;
+      if (!email || !item) return toast('Enter an email and pick an item.', 'warn');
+      e.target.disabled = true;
+      try {
+        await api.admin.assignContent({ email, item_type: type, item_id: item }, H());
+        toast('Access granted to ' + email + '.', 'success');
+        $('#as-email').value = '';
+      } catch (err) { toast(err.message || 'Could not grant access.', 'error'); }
+      e.target.disabled = false;
+    });
+  },
+};
+
+/* ── create course / book ──────────────────────────────── */
+
+async function contentForm(kind) {
+  const cats = await api.categories().catch(() => []);
+  const noun = kind === 'course' ? 'Course' : 'Book';
+
+  $('[data-panel]').innerHTML =
+    '<button class="mb-4 text-sm font-medium text-ink-muted hover:text-primary" data-back>&larr; Back to ' + kind + 's</button>' +
+    card(
+      '<h2 class="text-base">New ' + noun + '</h2>' +
+      '<div class="mt-4 grid gap-4 sm:grid-cols-2">' +
+        '<div class="sm:col-span-2"><label class="label" for="nc-title">Title</label>' +
+          '<input id="nc-title" class="field" placeholder="' + noun + ' title"></div>' +
+        '<div class="sm:col-span-2"><label class="label" for="nc-desc">Description</label>' +
+          '<textarea id="nc-desc" class="field" rows="3"></textarea></div>' +
+        '<div><label class="label" for="nc-price">Price (INR)</label>' +
+          '<input id="nc-price" class="field" type="number" min="0" step="1" value="0"></div>' +
+        '<div><label class="label" for="nc-cat">Category</label>' +
+          '<select id="nc-cat" class="field">' +
+            cats.map((c) => '<option value="' + c.id + '">' + fmt.esc(c.name) + '</option>').join('') +
+          '</select></div>' +
+        '<div class="sm:col-span-2"><label class="label" for="nc-thumb">Cover image</label>' +
+          '<input id="nc-thumb" class="field" type="file" accept="image/*">' +
+          '<p class="mt-1 text-xs text-ink-muted">Uploaded to the server first, then attached to the ' + kind + '.</p></div>' +
+      '</div>' +
+      '<div class="mt-5 flex items-center gap-3">' +
+        '<button class="btn-primary" data-create>Create ' + kind + '</button>' +
+        '<span class="text-sm text-ink-muted" data-progress></span>' +
+      '</div>');
+
+  $('[data-back]').addEventListener('click', () => open(kind + 's'));
+
+  $('[data-create]').addEventListener('click', async (e) => {
+    const title = $('#nc-title').value.trim();
+    const description = $('#nc-desc').value.trim();
+    const price = Number($('#nc-price').value || 0);
+    const category = $('#nc-cat').value;
+    const file = $('#nc-thumb').files[0];
+
+    if (!title) return toast('Give it a title.', 'warn');
+    if (!category) return toast('Pick a category.', 'warn');
+
+    e.target.disabled = true;
+    const prog = $('[data-progress]');
+
+    try {
+      let thumbnail_url = '';
+      if (file) {
+        prog.textContent = 'Uploading cover…';
+        const fd = new FormData();
+        fd.append('thumbnail', file);
+        const up = await api.admin.uploadThumbnail(fd, H());
+        thumbnail_url = up.thumbnail_url || '';
+      }
+
+      prog.textContent = 'Creating…';
+      const payload = { title, description, price, category, thumbnail_url };
+      if (kind === 'course') await api.admin.createCourse(payload, H());
+      else                   await api.admin.createBook(payload, H());
+
+      toast(noun + ' created.', 'success');
+      open(kind + 's');
+    } catch (err) {
+      prog.textContent = '';
+      e.target.disabled = false;
+      toast(err.message || 'Could not create the ' + kind + '.', 'error');
+    }
+  });
+}
+
+/* ── start ─────────────────────────────────────────────── */
+
+if (session.isAdmin) showConsole();
+</script>
+</body>
+</html>

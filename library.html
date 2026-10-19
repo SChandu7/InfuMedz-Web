@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My Library — InfuMedz</title>
+<meta name="description" content="Your purchased InfuMedz courses and books.">
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/app.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230E5FD8'/%3E%3Ctext x='16' y='22' font-family='system-ui' font-size='18' font-weight='900' fill='white' text-anchor='middle'%3EI%3C/text%3E%3C/svg%3E">
+</head>
+<body>
+
+<div data-header></div>
+
+<section class="border-b border-line bg-white">
+  <div class="shell py-10">
+    <nav class="mb-3 flex items-center gap-2 text-xs text-ink-muted" aria-label="Breadcrumb">
+      <a href="index.html" class="hover:text-primary">Home</a>
+      <span aria-hidden="true">/</span>
+      <span class="font-medium text-navy">My Library</span>
+    </nav>
+    <h1 class="text-3xl sm:text-4xl">My Library</h1>
+    <p class="prose-brand mt-2" data-greeting>Everything you have access to, in one place.</p>
+  </div>
+</section>
+
+<section class="section">
+  <div class="shell space-y-12">
+
+    <div>
+      <div class="mb-6 flex items-end justify-between gap-4">
+        <h2 class="text-xl">Courses <span class="text-base font-medium text-ink-muted" data-count-courses></span></h2>
+        <a href="courses.html" class="btn-ghost btn-sm shrink-0">Find more</a>
+      </div>
+      <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" data-courses></div>
+    </div>
+
+    <div>
+      <div class="mb-6 flex items-end justify-between gap-4">
+        <h2 class="text-xl">Books <span class="text-base font-medium text-ink-muted" data-count-books></span></h2>
+        <a href="books.html" class="btn-ghost btn-sm shrink-0">Find more</a>
+      </div>
+      <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" data-books></div>
+    </div>
+
+    <!-- Notifications: the app has a bell; on web this reads better as a panel -->
+    <div data-notif-wrap class="hidden">
+      <div class="mb-6 flex items-end justify-between gap-4">
+        <h2 class="text-xl">Notifications</h2>
+        <button class="btn-ghost btn-sm shrink-0" data-clear-notif>Clear all</button>
+      </div>
+      <div class="card divide-y divide-line" data-notifs></div>
+    </div>
+
+  </div>
+</section>
+
+<div data-footer></div>
+
+<script type="module">
+import { api } from './assets/js/api.js';
+import { session } from './assets/js/session.js';
+import { boot, skeletonGrid, emptyState, fmt, toast } from './assets/js/ui.js';
+
+boot('library.html');
+const $ = (s) => document.querySelector(s);
+
+if (!session.requireLogin('library.html')) {
+  // requireLogin redirects; stop the rest of the module from running.
+  throw new Error('not signed in');
+}
+
+$('[data-courses]').innerHTML = skeletonGrid(4);
+$('[data-books]').innerHTML   = skeletonGrid(4);
+
+/* The library endpoint returns a trimmed shape - {course_id, title, thumbnail}
+   - not the full catalogue record, so these cards are built here rather than
+   reusing itemCard(), which expects price/category/counts. */
+function ownedCard(item, kind) {
+  const id = kind === 'course' ? item.course_id : item.book_id;
+  const href = (kind === 'course' ? 'course.html?id=' : 'book.html?id=') + encodeURIComponent(id);
+  const verb = kind === 'course' ? 'Continue watching' : 'Open book';
+
+  return '' +
+    '<a href="' + href + '" class="card-hover group flex flex-col overflow-hidden">' +
+      '<div class="relative aspect-video overflow-hidden bg-chip">' +
+        '<img src="' + fmt.esc(item.thumbnail || '') + '" alt="" loading="lazy" ' +
+             'class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]">' +
+        '<div class="absolute left-3 top-3"><span class="badge-own">Owned</span></div>' +
+      '</div>' +
+      '<div class="flex flex-1 flex-col p-4">' +
+        '<h3 class="line-2 text-[15px] font-bold leading-snug text-navy transition-colors group-hover:text-primary">' +
+          fmt.esc(item.title) + '</h3>' +
+        '<span class="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-primary">' + verb +
+          '<svg class="h-4 w-4 transition-transform group-hover:translate-x-0.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">' +
+            '<path fill-rule="evenodd" d="M7.3 4.3 13 10l-5.7 5.7-1.4-1.4L10.2 10 5.9 5.7l1.4-1.4Z" clip-rule="evenodd"/></svg>' +
+        '</span>' +
+      '</div>' +
+    '</a>';
+}
+
+function notifRow(n) {
+  return '' +
+    '<div class="flex items-start gap-3 p-4">' +
+      '<span class="mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-full ' +
+             (n.is_read ? 'bg-canvas text-ink-muted' : 'bg-chip text-primary') + '">' +
+        '<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a6 6 0 0 0-6 6v3L2.5 14h15L16 11V8a6 6 0 0 0-6-6Zm0 16a2.5 2.5 0 0 0 2.4-2h-4.8A2.5 2.5 0 0 0 10 18Z"/></svg>' +
+      '</span>' +
+      '<div class="min-w-0 flex-1">' +
+        '<p class="text-sm font-semibold ' + (n.is_read ? 'text-ink-soft' : 'text-navy') + '">' +
+          fmt.esc(n.title || 'Notification') + '</p>' +
+        (n.body ? '<p class="prose-brand mt-0.5 text-sm">' + fmt.esc(n.body) + '</p>' : '') +
+        '<p class="mt-1 text-xs text-ink-muted">' + fmt.ago(n.created_at) + '</p>' +
+      '</div>' +
+    '</div>';
+}
+
+async function load() {
+  const user = session.user;
+  if (user && user.name) {
+    $('[data-greeting]').textContent =
+      'Welcome back, ' + user.name.split(' ')[0] + '. Everything you have access to, in one place.';
+  }
+
+  const lib = await api.library(session.userId);
+  const courses = lib.courses || [];
+  const books   = lib.books   || [];
+
+  $('[data-count-courses]').textContent = courses.length ? '(' + courses.length + ')' : '';
+  $('[data-count-books]').textContent   = books.length   ? '(' + books.length   + ')' : '';
+
+  $('[data-courses]').innerHTML = courses.length
+    ? courses.map((c) => ownedCard(c, 'course')).join('')
+    : emptyState('No courses yet',
+        'Courses you buy will appear here and stay available for life.',
+        '<a href="courses.html" class="btn-primary btn-sm">Browse courses</a>');
+
+  $('[data-books]').innerHTML = books.length
+    ? books.map((b) => ownedCard(b, 'book')).join('')
+    : emptyState('No books yet',
+        'Books and notes you buy will appear here.',
+        '<a href="books.html" class="btn-primary btn-sm">Browse books</a>');
+
+  // Notifications are a nice-to-have; a failure here must not break the page.
+  try {
+    const notifs = await api.notifications(session.userId);
+    const rows = Array.isArray(notifs) ? notifs : (notifs.notifications || []);
+    if (rows.length) {
+      $('[data-notif-wrap]').classList.remove('hidden');
+      $('[data-notifs]').innerHTML = rows.map(notifRow).join('');
+    }
+  } catch (_) { /* silent - not worth interrupting the library for */ }
+}
+
+$('[data-clear-notif]').addEventListener('click', async (e) => {
+  e.target.disabled = true;
+  try {
+    await api.clearNotifications(session.userId);
+    $('[data-notif-wrap]').classList.add('hidden');
+    toast('Notifications cleared.', 'success');
+  } catch (err) {
+    e.target.disabled = false;
+    toast(err.message || 'Could not clear notifications.', 'error');
+  }
+});
+
+load().catch((e) => {
+  $('[data-courses]').innerHTML = emptyState(
+    'Could not load your library', e.message || 'Something went wrong.',
+    '<button class="btn-primary btn-sm" onclick="location.reload()">Try again</button>');
+  $('[data-books]').innerHTML = '';
+});
+</script>
+</body>
+</html>

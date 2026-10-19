@@ -1,0 +1,76 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─────────────────────────────────────────────────────────────
+   InfuMedz website — component layer.
+
+   The app's visual identity is kept (brand blue, navy, the
+   indigo→cyan hero), but the *patterns* here are web patterns:
+   wide grids, a sticky desktop header, hover affordances and a
+   real footer. No bottom tab bar, no phone-width cards.
+   ───────────────────────────────────────────────────────────── */
+
+@layer base {
+  html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+  body { @apply bg-canvas text-ink font-sans antialiased; }
+  h1,h2,h3,h4 { @apply font-bold tracking-tight text-navy; }
+  :focus-visible { @apply outline-none ring-2 ring-primary/60 ring-offset-2 ring-offset-white; }
+  ::selection { @apply bg-primary/15; }
+}
+
+@layer components {
+
+  /* Layout */
+  .shell      { @apply mx-auto w-full max-w-shell px-4 sm:px-6 lg:px-8; }
+  .section    { @apply py-12 lg:py-16; }
+  .eyebrow    { @apply text-xs font-semibold uppercase tracking-[.14em] text-primary; }
+
+  /* Buttons */
+  .btn        { @apply inline-flex items-center justify-center gap-2 rounded-xl2 px-5 py-2.5
+                       text-sm font-semibold transition-all duration-150
+                       disabled:pointer-events-none disabled:opacity-50; }
+  .btn-primary{ @apply btn bg-primary text-white shadow-card hover:bg-primary-dark hover:shadow-lift active:translate-y-px; }
+  .btn-ghost  { @apply btn border border-line bg-white text-navy hover:border-primary/40 hover:bg-chip; }
+  .btn-light  { @apply btn bg-white/15 text-white backdrop-blur hover:bg-white/25; }
+  .btn-sm     { @apply px-3.5 py-1.5 text-[13px]; }
+  .btn-lg     { @apply px-7 py-3.5 text-base; }
+
+  /* Surfaces */
+  .card       { @apply rounded-xl2 border border-line bg-white shadow-card; }
+  .card-hover { @apply card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lift hover:border-primary/30; }
+
+  /* Form controls */
+  .field      { @apply w-full rounded-xl2 border border-line bg-white px-4 py-2.5 text-sm
+                       placeholder:text-ink-muted focus:border-primary focus:outline-none
+                       focus:ring-2 focus:ring-primary/20; }
+  .label      { @apply mb-1.5 block text-sm font-medium text-navy; }
+
+  /* Badges */
+  .badge      { @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold; }
+  .badge-cat  { @apply badge bg-chip text-primary; }
+  .badge-free { @apply badge bg-free/15 text-ok; }
+  .badge-own  { @apply badge bg-ok/10 text-ok; }
+
+  /* Nav */
+  .nav-link   { @apply relative text-sm font-medium text-ink-soft transition-colors hover:text-primary; }
+  .nav-link-active { @apply text-primary after:absolute after:-bottom-[21px] after:left-0
+                            after:h-0.5 after:w-full after:bg-primary after:content-['']; }
+
+  /* Skeletons — shown while the API responds, so pages never flash empty */
+  .sk         { @apply animate-pulse rounded bg-line/70; }
+
+  /* Locked content overlay (mirrors AppColors.lockOverlay, black 55%) */
+  .locked::after { @apply absolute inset-0 rounded-xl2 bg-black/55 content-['']; }
+
+  /* Prose for the long description blocks coming back from the API */
+  .prose-brand { @apply text-[15px] leading-relaxed text-ink-soft; }
+  .prose-brand p + p { @apply mt-3; }
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  .line-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .line-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+}

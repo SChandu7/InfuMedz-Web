@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in — InfuMedz</title>
+<meta name="description" content="Sign in to InfuMedz to access your purchased courses and books.">
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/app.css">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230E5FD8'/%3E%3Ctext x='16' y='22' font-family='system-ui' font-size='18' font-weight='900' fill='white' text-anchor='middle'%3EI%3C/text%3E%3C/svg%3E">
+</head>
+<body>
+
+<div data-header></div>
+
+<section class="section">
+  <div class="shell grid items-center gap-12 lg:grid-cols-2">
+
+    <!-- Pitch column: a website has room for this; the app login screen did not -->
+    <div class="hidden lg:block">
+      <p class="eyebrow">Your account</p>
+      <h1 class="mt-2 text-3xl xl:text-4xl">Everything you have bought, in one place.</h1>
+      <p class="prose-brand mt-4 max-w-md">
+        Sign in to open your lectures and notes on any device. Your library stays in sync
+        between this website and the InfuMedz mobile app.
+      </p>
+      <ul class="mt-8 space-y-4">
+        <li class="flex gap-3">
+          <span class="grid h-9 w-9 shrink-0 place-items-center rounded-xl2 bg-chip text-primary">
+            <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="m16.7 5.7-8.4 8.4-4.9-5 1.4-1.4 3.5 3.5 7-7 1.4 1.5Z" clip-rule="evenodd"/></svg>
+          </span>
+          <div><p class="text-sm font-semibold text-navy">One library, two devices</p>
+          <p class="text-sm text-ink-muted">Buy on the web, watch in the app — or the other way round.</p></div>
+        </li>
+        <li class="flex gap-3">
+          <span class="grid h-9 w-9 shrink-0 place-items-center rounded-xl2 bg-chip text-primary">
+            <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="m16.7 5.7-8.4 8.4-4.9-5 1.4-1.4 3.5 3.5 7-7 1.4 1.5Z" clip-rule="evenodd"/></svg>
+          </span>
+          <div><p class="text-sm font-semibold text-navy">Lifetime access</p>
+          <p class="text-sm text-ink-muted">No subscription. What you buy stays yours.</p></div>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Form column -->
+    <div class="mx-auto w-full max-w-md">
+      <div class="card p-6 sm:p-8">
+
+        <div class="mb-6 grid grid-cols-2 gap-1 rounded-xl2 bg-canvas p-1" role="tablist">
+          <button role="tab" aria-selected="true" data-tab="login"
+                  class="rounded-lg py-2 text-sm font-semibold transition-colors">Sign in</button>
+          <button role="tab" aria-selected="false" data-tab="signup"
+                  class="rounded-lg py-2 text-sm font-semibold transition-colors">Create account</button>
+        </div>
+
+        <!-- Sign in -->
+        <form data-panel="login" novalidate>
+          <h2 class="text-xl">Welcome back</h2>
+          <p class="prose-brand mt-1 text-sm">Use the email or phone number you signed up with.</p>
+
+          <div data-gbtn-host class="mt-5">
+            <div data-gbtn class="flex justify-center"></div>
+            <p data-gbtn-fallback class="hidden text-center text-xs text-ink-muted">
+              Google sign-in is unavailable right now. Use your email and password below.
+            </p>
+          </div>
+          <div class="my-5 flex items-center gap-3">
+            <span class="h-px flex-1 bg-line"></span>
+            <span class="text-xs font-medium uppercase tracking-wider text-ink-muted">or</span>
+            <span class="h-px flex-1 bg-line"></span>
+          </div>
+
+          <div class="mt-5">
+            <label class="label" for="li-id">Email or phone</label>
+            <input id="li-id" class="field" type="text" autocomplete="username" required
+                   placeholder="you@example.com">
+          </div>
+          <div class="mt-4">
+            <label class="label" for="li-pw">Password</label>
+            <div class="relative">
+              <input id="li-pw" class="field pr-11" type="password" autocomplete="current-password" required
+                     placeholder="Your password">
+              <button type="button" class="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-2 text-ink-muted hover:text-primary"
+                      data-toggle="li-pw" aria-label="Show password">
+                <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M10 4C5.5 4 2.2 7.1 1 10c1.2 2.9 4.5 6 9 6s7.8-3.1 9-6c-1.2-2.9-4.5-6-9-6Zm0 10a4 4 0 1 1 0-8 4 4 0 0 1 0 8Zm0-2a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <button class="btn-primary mt-6 w-full" type="submit" data-submit>Sign in</button>
+          <p class="mt-4 text-center text-sm text-ink-muted">
+            New here? <button type="button" class="font-semibold text-primary hover:underline" data-goto="signup">Create an account</button>
+          </p>
+        </form>
+
+        <!-- Create account -->
+        <form data-panel="signup" class="hidden" novalidate>
+          <h2 class="text-xl">Create your account</h2>
+          <p class="prose-brand mt-1 text-sm">Free to create. You only pay for what you buy.</p>
+
+          <div class="mt-5">
+            <label class="label" for="su-name">Full name</label>
+            <input id="su-name" class="field" type="text" autocomplete="name" required placeholder="Dr. Your Name">
+          </div>
+          <div class="mt-4">
+            <label class="label" for="su-email">Email</label>
+            <input id="su-email" class="field" type="email" autocomplete="email" required placeholder="you@example.com">
+          </div>
+          <div class="mt-4">
+            <label class="label" for="su-phone">Phone</label>
+            <input id="su-phone" class="field" type="tel" autocomplete="tel" required
+                   inputmode="numeric" maxlength="15" placeholder="10-digit mobile number">
+          </div>
+          <div class="mt-4">
+            <label class="label" for="su-pw">Password</label>
+            <div class="relative">
+              <input id="su-pw" class="field pr-11" type="password" autocomplete="new-password" required
+                     minlength="6" placeholder="At least 6 characters">
+              <button type="button" class="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-2 text-ink-muted hover:text-primary"
+                      data-toggle="su-pw" aria-label="Show password">
+                <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M10 4C5.5 4 2.2 7.1 1 10c1.2 2.9 4.5 6 9 6s7.8-3.1 9-6c-1.2-2.9-4.5-6-9-6Zm0 10a4 4 0 1 1 0-8 4 4 0 0 1 0 8Zm0-2a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <button class="btn-primary mt-6 w-full" type="submit" data-submit>Create account</button>
+          <p class="mt-4 text-center text-sm text-ink-muted">
+            Already have an account? <button type="button" class="font-semibold text-primary hover:underline" data-goto="login">Sign in</button>
+          </p>
+        </form>
+
+        <p class="mt-6 border-t border-line pt-4 text-center text-xs text-ink-muted">
+          By continuing you agree to our
+          <a href="terms.html" class="text-primary hover:underline">Terms</a> and
+          <a href="privacy.html" class="text-primary hover:underline">Privacy Policy</a>.
+        </p>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<div data-footer></div>
+
+<script type="module">
+import { session } from './assets/js/session.js';
+import { boot, toast } from './assets/js/ui.js';
+
+boot('login.html');
+const $  = (s) => document.querySelector(s);
+const $$ = (s) => Array.from(document.querySelectorAll(s));
+
+/* ── Google Sign-In (Google Identity Services) ─────────── */
+
+// Same OAuth client the backend verifies against (views.py GOOGLE_CLIENT_ID).
+// For this to work on the live domain, https://infusionmedz.com must be listed
+// under "Authorised JavaScript origins" on that client in Google Cloud Console.
+const GOOGLE_CLIENT_ID = '403601886832-na6gh8s11lijfpu9v9e0r1668em3720a.apps.googleusercontent.com';
+
+async function onGoogleCredential(response) {
+  if (!response || !response.credential) return;
+  try {
+    await session.googleLogin(response.credential);
+    location.href = next;
+  } catch (err) {
+    // A 400 "Invalid token" here almost always means the client ID's audience
+    // does not match what the backend expects, not that the user did anything
+    // wrong - so say something actionable rather than echoing the API.
+    toast(err.status === 400
+      ? 'Google sign-in is not configured for this site yet. Use email and password for now.'
+      : (err.message || 'Google sign-in failed.'), 'error', 7000);
+  }
+}
+
+function initGoogle() {
+  const host = document.querySelector('[data-gbtn]');
+  if (!host) return;
+
+  if (!window.google || !window.google.accounts || !window.google.accounts.id) {
+    // Script blocked, offline, or still loading - degrade to password login
+    // rather than leaving a dead empty box on the form.
+    document.querySelector('[data-gbtn-fallback]').classList.remove('hidden');
+    return;
+  }
+
+  window.google.accounts.id.initialize({
+    client_id: GOOGLE_CLIENT_ID,
+    callback: onGoogleCredential,
+    ux_mode: 'popup',
+  });
+  window.google.accounts.id.renderButton(host, {
+    theme: 'outline',
+    size: 'large',
+    width: 320,
+    text: 'continue_with',
+    shape: 'pill',
+    logo_alignment: 'left',
+  });
+}
+
+// GIS loads async+defer, so poll briefly rather than racing it.
+let gTries = 0;
+const gTimer = setInterval(() => {
+  if (window.google && window.google.accounts && window.google.accounts.id) {
+    clearInterval(gTimer);
+    initGoogle();
+  } else if (++gTries > 25) {           // ~5s
+    clearInterval(gTimer);
+    initGoogle();                        // shows the fallback message
+  }
+}, 200);
+
+const params = new URLSearchParams(location.search);
+const next = params.get('next') || 'library.html';
+
+// Already signed in? Nothing to do here.
+if (session.isLoggedIn) location.replace(next);
+
+/* ── tabs ──────────────────────────────────────────────── */
+
+function showTab(which) {
+  $$('[data-tab]').forEach((b) => {
+    const on = b.dataset.tab === which;
+    b.setAttribute('aria-selected', String(on));
+    b.className = 'rounded-lg py-2 text-sm font-semibold transition-colors ' +
+      (on ? 'bg-white text-primary shadow-card' : 'text-ink-muted hover:text-navy');
+  });
+  $$('[data-panel]').forEach((p) => p.classList.toggle('hidden', p.dataset.panel !== which));
+  history.replaceState(null, '', which === 'signup' ? '#signup' : location.pathname + location.search);
+}
+
+$$('[data-tab]').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
+$$('[data-goto]').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.goto)));
+showTab(location.hash === '#signup' ? 'signup' : 'login');
+
+/* ── password visibility ───────────────────────────────── */
+
+$$('[data-toggle]').forEach((b) => {
+  b.addEventListener('click', () => {
+    const input = document.getElementById(b.dataset.toggle);
+    const show = input.type === 'password';
+    input.type = show ? 'text' : 'password';
+    b.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+  });
+});
+
+/* ── submit ────────────────────────────────────────────── */
+
+function busy(form, on, label) {
+  const btn = form.querySelector('[data-submit]');
+  btn.disabled = on;
+  btn.textContent = on ? 'Please wait…' : label;
+}
+
+$('[data-panel="login"]').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const id = $('#li-id').value.trim();
+  const pw = $('#li-pw').value;
+  if (!id || !pw) return toast('Enter your email or phone, and your password.', 'warn');
+
+  busy(e.target, true);
+  try {
+    await session.login(id, pw);
+    location.href = next;
+  } catch (err) {
+    busy(e.target, false, 'Sign in');
+    // The backend already writes these for end users: "User not found",
+    // "Invalid password", "Account corrupted. Contact support".
+    toast(err.message || 'Could not sign you in.', 'error');
+  }
+});
+
+$('[data-panel="signup"]').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name  = $('#su-name').value.trim();
+  const email = $('#su-email').value.trim();
+  const phone = $('#su-phone').value.trim();
+  const pw    = $('#su-pw').value;
+
+  if (!name || !email || !phone || !pw) return toast('Please fill in every field.', 'warn');
+  if (pw.length < 6) return toast('Use at least 6 characters for your password.', 'warn');
+  if (!/^\S+@\S+\.\S+$/.test(email)) return toast('That email address does not look right.', 'warn');
+
+  busy(e.target, true);
+  try {
+    const r = await session.signup({ name, email, phone, password: pw });
+    if (session.isLoggedIn) {
+      toast('Account created. Welcome to InfuMedz.', 'success');
+      location.href = next;
+    } else {
+      // Some signup responses carry no user_id; send them to sign in rather
+      // than leaving a half-built session behind.
+      toast((r && r.message) || 'Account created — please sign in.', 'success');
+      $('#li-id').value = email;
+      showTab('login');
+      busy(e.target, false, 'Create account');
+    }
+  } catch (err) {
+    busy(e.target, false, 'Create account');
+    toast(err.message || 'Could not create your account.', 'error');
+  }
+});
+</script>
+</body>
+</html>

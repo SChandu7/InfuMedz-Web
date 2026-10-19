@@ -1,0 +1,13 @@
+{
+  "name": "infumedz-web",
+  "version": "1.0.0",
+  "private": true,
+  "description": "InfuMedz website - static build for GitHub Pages, talks to api.chandus7.in",
+  "scripts": {
+    "build": "tailwindcss -i ./src/input.css -o ./assets/css/app.css --minify",
+    "dev": "tailwindcss -i ./src/input.css -o ./assets/css/app.css --watch"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.17"
+  }
+}

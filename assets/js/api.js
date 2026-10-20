@@ -79,6 +79,7 @@ async function request(path, options = {}) {
 
 const get  = (p, h)    => request(p, { headers: h });
 const post = (p, b, h) => request(p, { method: 'POST', body: b, headers: h });
+const put  = (p, b, h) => request(p, { method: 'PUT', body: b, headers: h });
 const del  = (p, h)    => request(p, { method: 'DELETE', headers: h });
 
 export const api = {
@@ -163,7 +164,10 @@ export const api = {
     addFaq:    (d, h) => post('/api/infumedz/faq/add/', d, h),
     deleteFaq: (id, h) => del('/api/infumedz/faq/delete/' + id + '/', h),
 
-    banner: (d, h) => post('/api/infumedz/app-banner/', d, h),
+    /* AppBannerView and AppConfigView both expose GET (public) and PUT
+       (admin). They have no POST handler at all - sending one returns 405. */
+    saveBanner: (d, h) => put('/api/infumedz/app-banner/', d, h),
+    saveConfig: (d, h) => put('/api/infumedz/app-config/', d, h),
 
     /* These two paths genuinely carry no /api/infumedz/ prefix. */
     uploadThumbnail: (formData, h) => post('/api/infumedz/upload/course-thumbnail/', formData, h),

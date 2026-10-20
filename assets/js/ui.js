@@ -32,7 +32,7 @@ function logoMark(size) {
   var px = size || 'h-9 w-9';
   return '<span class="relative grid ' + px + ' shrink-0 place-items-center overflow-hidden rounded-xl2 bg-brand-grad">' +
            '<span class="text-base font-black text-white">I</span>' +
-           '<img src="' + rel('logo.jpeg') + '" alt="" class="absolute inset-0 h-full w-full object-cover" onerror="this.remove()">' +
+           '<img src="' + rel('assets/img/logo.jpeg') + '" alt="" class="absolute inset-0 h-full w-full object-cover" onerror="this.remove()">' +
          '</span>';
 }
 

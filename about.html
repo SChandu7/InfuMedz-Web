@@ -110,6 +110,20 @@
   </div>
 </section>
 
+<!-- ---- Team ---- -->
+<section class="border-t border-line bg-white">
+  <div class="shell py-14">
+    <div class="mx-auto max-w-2xl text-center">
+      <p class="eyebrow">Our team</p>
+      <h2 class="mt-1.5 text-2xl sm:text-3xl">The people behind InfuMedz</h2>
+      <p class="prose-brand mt-3">
+        Practising clinicians and educators who write, review and teach the material themselves.
+      </p>
+    </div>
+    <div class="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4" data-team></div>
+  </div>
+</section>
+
 <!-- ── Specialities ─────────────────────────────────────── -->
 <section class="border-y border-line bg-canvas">
   <div class="shell py-14">
@@ -179,6 +193,86 @@ const BLURB = {
   'MD/MS':   'Core post-graduate curriculum, framed around ward decisions.',
   'MBBS':    'Undergraduate foundations and structured revision.',
 };
+
+/* =========================================================
+   TEAM - THIS IS THE LIST YOU EDIT
+
+   Four members. For each one:
+     name   - as it should appear publicly
+     role   - position / title
+     creds  - degrees or qualifications (optional)
+     bio    - one or two sentences (optional)
+     photo  - a file you drop in assets/img/, e.g. 'assets/img/akif.jpg'.
+              Leave it as '' and the card shows their initials instead, so a
+              missing photo never produces a broken image.
+
+   The first entry is pre-filled from the author page of ADULT CARDIOLOGY
+   Volume 1 purely to show the shape - correct anything that is wrong, and
+   replace members 3 and 4 with the real people.
+   ========================================================= */
+
+const TEAM = [
+  {
+    name:  'Dr. Akif Ahamad Baig',
+    role:  'Founder & Consultant Interventional Cardiologist',
+    creds: 'MBBS, DNB (General Medicine), DM (Cardiology)',
+    bio:   'Founder of Infusion Medical Education Zone. Practising at Aster Ramesh Hospital, Guntur, specialising in complex coronary interventions, pacemaker implantation and IVC filter placement.',
+    photo: 'assets/img/team1.jpeg',
+  },
+  {
+    name:  'M. A. Sameena Farheen',
+    role:  'Co-author & Academic Lead',
+    creds: '',
+    bio:   '',
+    photo: 'assets/img/team2.jpeg',
+  },
+  {
+    name:  'Team member 3',
+    role:  'Role',
+    creds: '',
+    bio:   '',
+    photo: 'assets/img/team3.jpeg',
+  },
+  {
+    name:  'Team member 4',
+    role:  'Role',
+    creds: '',
+    bio:   '',
+    photo: 'assets/img/team4.jpeg',
+  },
+];
+
+function teamInitials(name) {
+  const words = String(name || '?').trim().split(/\s+/)
+    .filter(function (w) { return /^[A-Za-z]/.test(w); });
+  const pick = words.slice(-2);
+  return pick.map(function (w) { return w[0]; }).join('').toUpperCase() || '?';
+}
+
+function teamCard(m) {
+  const initials = teamInitials(m.name);
+
+  // A photo that fails to load is swapped for the initials, so the ring and
+  // layout stay intact instead of showing a broken-image glyph.
+  const avatar = m.photo
+    ? '<img src="' + fmt.esc(m.photo) + '" alt="" class="h-full w-full object-cover" ' +
+      'data-initials="' + fmt.esc(initials) + '" onerror="this.outerHTML=' +
+      '&quot;<span class=\'text-xl font-black text-white\'>&quot;+this.dataset.initials+&quot;</span>&quot;">'
+    : '<span class="text-xl font-black text-white">' + fmt.esc(initials) + '</span>';
+
+  return '' +
+    '<div class="card-hover group p-6 text-center">' +
+      '<span class="mx-auto grid h-20 w-20 place-items-center overflow-hidden rounded-full bg-brand-grad ring-4 ring-chip">' +
+        avatar +
+      '</span>' +
+      '<h3 class="mt-4 text-base leading-snug">' + fmt.esc(m.name) + '</h3>' +
+      '<p class="mt-1 text-sm font-semibold text-primary">' + fmt.esc(m.role) + '</p>' +
+      (m.creds ? '<p class="mt-1 text-xs text-ink-muted">' + fmt.esc(m.creds) + '</p>' : '') +
+      (m.bio ? '<p class="prose-brand mt-3 text-sm">' + fmt.esc(m.bio) + '</p>' : '') +
+    '</div>';
+}
+
+document.querySelector('[data-team]').innerHTML = TEAM.map(teamCard).join('');
 
 async function load() {
   const [courses, books, cats, banner] = await Promise.all([

@@ -34,6 +34,27 @@ sub("<title data-title>Course — InfuMedz</title>",
 sub('content="Video lecture course on InfuMedz."',
     'content="Reference notes and question banks on InfuMedz."')
 sub("boot('courses.html');", "boot('books.html');")
+sub("import { boot, fmt, stars, toast, emptyState } from './assets/js/ui.js';",
+    "import { boot, fmt, stars, toast, emptyState } from './assets/js/ui.js';\n"
+    "import { mountPdfReader } from './assets/js/pdfreader.js';")
+# After the player markup is injected, mount the canvas reader into it.
+sub("""function renderPlayer() {
+  $('[data-player]').innerHTML = playerMarkup();
+  wirePlayer();
+  paintList();
+}""",
+    """function renderPlayer() {
+  $('[data-player]').innerHTML = playerMarkup();
+  wirePlayer();
+  paintList();
+
+  // The markup leaves an empty [data-pdf-host]; PDF.js fills it. Done after
+  // injection rather than inside playerMarkup() because mounting is async.
+  const host = $('[data-pdf-host]');
+  if (host && activeIndex >= 0) {
+    mountPdfReader(host, flat[activeIndex].v.pdf_url, flat[activeIndex].v.title);
+  }
+}""")
 
 # ════ missing-id guard ════
 sub("emptyState('No course selected', 'That link is missing a course id.',",
@@ -95,26 +116,17 @@ OLD_VIDEO = """  return '' +
       '</div>' +
     '</div>';"""
 
-NEW_VIEWER = """  // Read-only reader. #toolbar=0&navpanes=0 hides the browser PDF viewer's
-  // own download and print buttons, and there is no download link anywhere
-  // on the page - you scroll and read, as asked.
+NEW_VIEWER = """  // Rendered to <canvas> by PDF.js, not an <iframe>. Android Chrome has no
+  // in-iframe PDF viewer and shows a "PDF / Open" card that downloads the
+  // file instead - so an iframe simply does not work on a phone. The canvas
+  // reader behaves the same on every browser and gives real controls.
   //
   // Being honest about what this is: it removes the download AFFORDANCE, it
   // is not access control. The file URL is still reachable by anyone who
   // opens DevTools. Signed, expiring media URLs are the actual fix and were
   // deliberately deferred to a later pass.
   return '' +
-    '<div class="overflow-hidden rounded-xl2 border border-line bg-white shadow-lift">' +
-      '<div class="flex items-center gap-3 border-b border-line bg-canvas px-4 py-2.5">' +
-        '<span class="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-chip text-primary">' +
-          '<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 3a2 2 0 0 1 2-2h5.6L16 5.4V17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V3Zm7 .5V6h2.5L11 3.5Z" clip-rule="evenodd"/></svg>' +
-        '</span>' +
-        '<p class="min-w-0 flex-1 truncate text-sm font-semibold text-navy">' + fmt.esc(cur.v.title) + '</p>' +
-        '<span class="shrink-0 text-xs text-ink-muted">' + (cur.n + 1) + ' / ' + flat.length + '</span>' +
-      '</div>' +
-      '<iframe class="h-[min(78vh,900px)] w-full bg-canvas" title="' + fmt.esc(cur.v.title) + '" ' +
-              'src="' + fmt.esc(cur.v.pdf_url) + '#toolbar=0&amp;navpanes=0&amp;scrollbar=1&amp;view=FitH"></iframe>' +
-    '</div>' +
+    '<div data-pdf-host></div>' +
     '<div class="mt-4 flex flex-wrap items-center justify-between gap-3">' +
       '<div class="min-w-0">' +
         '<p class="text-xs font-semibold uppercase tracking-wider text-primary">Chapter ' + (cur.n + 1) + ' of ' + flat.length + '</p>' +

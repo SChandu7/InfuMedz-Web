@@ -84,12 +84,12 @@
       </dl>
     </div>
 
-    <!-- Hero visual: the top course, as a real card -->
+    <!-- Hero visual: the admin's own banner carousel, same images and the
+         same 3-second rotation as the app's home screen -->
     <div class="relative">
       <div class="absolute -inset-4 -z-10 rounded-[1.75rem] bg-hero-grad opacity-10 blur-2xl" aria-hidden="true"></div>
-      <div data-hero-card class="card overflow-hidden shadow-lift">
+      <div data-carousel class="card overflow-hidden shadow-lift">
         <div class="sk aspect-video rounded-none"></div>
-        <div class="space-y-2 p-5"><div class="sk h-4 w-24"></div><div class="sk h-5 w-full"></div></div>
       </div>
     </div>
   </div>
@@ -118,7 +118,7 @@
       <div>
         <p class="eyebrow">Video lectures</p>
         <h2 class="mt-1.5 text-2xl sm:text-3xl">Courses</h2>
-        <p class="prose-brand mt-2 max-w-xl">Watch chapter by chapter, at your own pace. Buy once, keep for life.</p>
+        <p class="prose-brand mt-2 max-w-xl">Hand-picked by our faculty. Watch chapter by chapter, buy once, keep for life.</p>
       </div>
       <a href="courses.html" class="btn-ghost btn-sm shrink-0">View all courses</a>
     </div>
@@ -162,7 +162,7 @@
       <div>
         <p class="eyebrow">Reference</p>
         <h2 class="mt-1.5 text-2xl sm:text-3xl">Concise notes &amp; question banks</h2>
-        <p class="prose-brand mt-2 max-w-xl">Organised by chapter, searchable, and readable straight in the browser.</p>
+        <p class="prose-brand mt-2 max-w-xl">Hand-picked reference sets, organised by chapter and readable straight in the browser.</p>
       </div>
       <a href="books.html" class="btn-ghost btn-sm shrink-0">View all notes</a>
     </div>
@@ -242,28 +242,79 @@ function categoryCard(c, counts) {
     '</a>';
 }
 
-function heroCard(c) {
-  if (!c) return '';
-  return '' +
-    '<a href="course.html?id=' + encodeURIComponent(c.id) + '" class="group block">' +
-      '<div class="relative aspect-video overflow-hidden bg-chip">' +
-        '<img src="' + fmt.esc(c.thumbnail_url || '') + '" alt="" ' +
-             'class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105">' +
-        '<div class="absolute inset-0 bg-gradient-to-t from-navy/70 via-navy/10 to-transparent"></div>' +
-        '<span class="absolute left-4 top-4 badge bg-white/90 text-primary backdrop-blur">Most enrolled</span>' +
-        '<div class="absolute inset-x-4 bottom-4">' +
-          '<p class="text-xs font-semibold uppercase tracking-wider text-white/80">' + fmt.esc(c.category_name || '') + '</p>' +
-          '<h3 class="line-2 mt-1 text-lg font-bold leading-snug text-white">' + fmt.esc(c.title) + '</h3>' +
-        '</div>' +
-      '</div>' +
-      '<div class="flex items-center justify-between gap-4 p-5">' +
-        '<div>' +
-          '<p class="text-xs text-ink-muted">' + ((c.videos || []).length) + ' lectures &middot; ' + (c.buyers_count || 0) + ' enrolled</p>' +
-          '<p class="mt-0.5 text-xl font-black text-navy">' + fmt.price(c.price) + '</p>' +
-        '</div>' +
-        '<span class="btn-primary btn-sm shrink-0">View course</span>' +
-      '</div>' +
-    '</a>';
+/* The app's home carousel, rebuilt for the web.
+
+   Images, order and count all come from the admin-managed AppBanner record
+   (carousel_urls), so whatever is set in the app's admin panel is what shows
+   here - no second list to maintain.
+
+   Auto-advances every 3 seconds, matching the app. It pauses on hover and
+   while the tab is hidden: a carousel that keeps cycling behind a background
+   tab burns battery and lands the visitor on a random slide when they come
+   back. Respects prefers-reduced-motion by not auto-advancing at all. */
+function mountCarousel(urls) {
+  const host = document.querySelector('[data-carousel]');
+  if (!host) return;
+
+  const slides = (urls || []).filter(Boolean);
+  if (!slides.length) {
+    // Nothing configured - drop the panel rather than leave an empty box.
+    host.closest('.relative').remove();
+    return;
+  }
+
+  host.innerHTML =
+    '<div class="relative aspect-video overflow-hidden bg-chip">' +
+      slides.map(function (u, i) {
+        return '<img src="' + fmt.esc(u) + '" alt="" ' +
+               (i === 0 ? '' : 'loading="lazy" ') +
+               'class="absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ' +
+               (i === 0 ? 'opacity-100' : 'opacity-0') + '" data-slide="' + i + '">';
+      }).join('') +
+      (slides.length > 1
+        ? '<div class="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1.5 bg-gradient-to-t from-black/45 to-transparent pb-3.5 pt-8">' +
+            slides.map(function (_, i) {
+              return '<button data-dot="' + i + '" aria-label="Go to slide ' + (i + 1) + '" ' +
+                     'class="h-1.5 rounded-full transition-all duration-300 ' +
+                     (i === 0 ? 'w-6 bg-white' : 'w-1.5 bg-white/55 hover:bg-white/80') + '"></button>';
+            }).join('') +
+          '</div>'
+        : '') +
+    '</div>';
+
+  if (slides.length < 2) return;
+
+  const imgs = Array.from(host.querySelectorAll('[data-slide]'));
+  const dots = Array.from(host.querySelectorAll('[data-dot]'));
+  let at = 0;
+  let timer = null;
+
+  function show(n) {
+    at = (n + slides.length) % slides.length;
+    imgs.forEach(function (im, i) {
+      im.classList.toggle('opacity-100', i === at);
+      im.classList.toggle('opacity-0', i !== at);
+    });
+    dots.forEach(function (d, i) {
+      d.className = 'h-1.5 rounded-full transition-all duration-300 ' +
+        (i === at ? 'w-6 bg-white' : 'w-1.5 bg-white/55 hover:bg-white/80');
+    });
+  }
+
+  const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function start() { if (!still && !timer) timer = setInterval(function () { show(at + 1); }, 3000); }
+  function stop()  { if (timer) { clearInterval(timer); timer = null; } }
+
+  dots.forEach(function (d) {
+    d.addEventListener('click', function () { stop(); show(Number(d.dataset.dot)); start(); });
+  });
+  host.addEventListener('mouseenter', stop);
+  host.addEventListener('mouseleave', start);
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) stop(); else start();
+  });
+
+  start();
 }
 
 function reviewCard(r) {
@@ -323,29 +374,30 @@ async function load() {
     } catch (_) { /* a library failure must not blank the home page */ }
   }
 
-  // Admin's pinned picks first, then most-enrolled.
-  const featured = (all, pinned, limit) => {
+  // Strictly the admin's picks from the app's admin panel - popular_courses
+  // and popular_books on the AppBanner record. If a pick has since been
+  // deleted it simply drops out; we do NOT silently backfill with
+  // most-enrolled, because then the admin could never tell whether what
+  // they see is their selection or the fallback.
+  const pick = (all, pinned) => {
     const byId = new Map(all.map((x) => [String(x.id), x]));
-    const chosen = (pinned || []).map((id) => byId.get(String(id))).filter(Boolean);
-    const rest = all.filter((x) => !chosen.includes(x))
-                    .sort((a, b) => (b.buyers_count || 0) - (a.buyers_count || 0));
-    return chosen.concat(rest).slice(0, limit);
+    return (pinned || []).map((id) => byId.get(String(id))).filter(Boolean);
   };
 
-  const topCourses = featured(live, banner && banner.popular_courses, 4);
-  const topBooks   = featured(books, banner && banner.popular_books, 4);
+  const topCourses = pick(live, banner && banner.popular_courses);
+  const topBooks   = pick(books, banner && banner.popular_books);
 
-  // Hero card shows the single most-enrolled course.
-  const hero = live.slice().sort((a, b) => (b.buyers_count || 0) - (a.buyers_count || 0))[0];
-  if (hero) $('[data-hero-card]').innerHTML = heroCard(hero);
+  mountCarousel(banner && banner.carousel_urls);
 
   $('[data-courses]').innerHTML = topCourses.length
     ? topCourses.map((c) => itemCard(c, 'course', { owned: owned.courses.has(String(c.id)) })).join('')
-    : '<p class="col-span-full text-sm text-ink-muted">No courses published yet.</p>';
+    : '<p class="col-span-full text-sm text-ink-muted">No featured courses selected yet. ' +
+      '<a href="courses.html" class="font-semibold text-primary hover:underline">Browse all courses</a>.</p>';
 
   $('[data-books]').innerHTML = topBooks.length
     ? topBooks.map((b) => itemCard(b, 'book', { owned: owned.books.has(String(b.id)) })).join('')
-    : '<p class="col-span-full text-sm text-ink-muted">No notes published yet.</p>';
+    : '<p class="col-span-full text-sm text-ink-muted">No featured notes selected yet. ' +
+      '<a href="books.html" class="font-semibold text-primary hover:underline">Browse all notes</a>.</p>';
 
   // Real reviews, pulled from the top few items. Only shown if we actually
   // find some with written comments - an empty testimonial row looks worse

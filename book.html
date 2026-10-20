@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title data-title>Book — InfuMedz</title>
-<meta name="description" data-desc content="Reference book and notes on InfuMedz.">
+<meta name="description" data-desc content="Reference notes and question banks on InfuMedz.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -16,11 +16,8 @@
 
 <div data-header></div>
 <main data-main>
-  <div class="shell py-16">
-    <div class="sk h-6 w-48"></div>
-    <div class="sk mt-4 h-10 w-2/3"></div>
-    <div class="sk mt-8 aspect-video w-full"></div>
-  </div>
+  <div class="bg-navy py-12"><div class="shell"><div class="sk h-4 w-48 bg-white/20"></div><div class="sk mt-4 h-9 w-2/3 bg-white/20"></div></div></div>
+  <div class="shell py-8"><div class="sk aspect-video w-full"></div></div>
 </main>
 <div data-footer></div>
 
@@ -32,7 +29,12 @@ import { boot, fmt, stars, toast, emptyState } from './assets/js/ui.js';
 boot('books.html');
 
 const $  = (s, r) => (r || document).querySelector(s);
+const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
 const id = new URLSearchParams(location.search).get('id');
+
+// Matches the app exactly - course_detail_screen.dart:525
+//     final isItemLocked = flatIndex >= 2 && _isLocked;
+const FREE_PREVIEW = 2;
 
 if (!id) {
   $('[data-main]').innerHTML = '<div class="shell py-16">' +
@@ -44,94 +46,215 @@ if (!id) {
 let book = null;
 let hasAccess = false;
 let reviewData = { average_rating: 0, total_reviews: 0, reviews: [] };
+let flat = [];                 // PDFs in display order, with lock state
+let activeIndex = -1;          // what is currently in the player
 
-/* ── lecture list ──────────────────────────────────────── */
+/* ── build the flat ordered list once ──────────────────── */
 
-// Matches the app exactly - lib/features/course_detail/course_detail_screen.dart:525
-//     final isItemLocked = flatIndex >= 2 && _isLocked;
-// The first two PDFs in flat order are a free preview for everyone; the
-// rest open only once check-access/ confirms the purchase.
-const FREE_PREVIEW = 2;
-
-function pdfRow(v, n, restricted) {
-  const locked = restricted && n > FREE_PREVIEW;
-  const free = !locked && restricted;
-  const icon = locked
-    ? '<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 1a4 4 0 0 0-4 4v2H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-1V5a4 4 0 0 0-4-4Zm2 6V5a2 2 0 1 0-4 0v2h4Z" clip-rule="evenodd"/></svg>'
-    : '<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M4 3a2 2 0 0 1 2-2h5.6L16 5.4V17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V3Zm7 .5V6h2.5L11 3.5Z" clip-rule="evenodd"/></svg>';
-
-  return '' +
-    '<button class="group flex w-full items-center gap-3 border-b border-line px-4 py-3 text-left last:border-0 ' +
-            (locked ? 'cursor-not-allowed' : 'hover:bg-chip') + '" ' +
-            (locked ? 'disabled aria-disabled="true"' : 'data-open="' + fmt.esc(v.pdf_url) + '" data-vtitle="' + fmt.esc(v.title) + '"') + '>' +
-      '<span class="grid h-8 w-8 shrink-0 place-items-center rounded-full ' +
-            (locked ? 'bg-line text-ink-muted' : 'bg-chip text-primary group-hover:bg-primary group-hover:text-white') + ' transition-colors">' +
-        icon + '</span>' +
-      '<span class="min-w-0 flex-1">' +
-        '<span class="block truncate text-sm font-medium ' + (locked ? 'text-ink-muted' : 'text-navy') + '">' +
-          n + '. ' + fmt.esc(v.title) + '</span>' +
-      '</span>' +
-      (locked ? '<span class="shrink-0 text-xs text-ink-muted">Locked</span>' : '') +
-      (free ? '<span class="badge-free shrink-0">Free preview</span>' : '') +
-    '</button>';
-}
-
-function pdfList() {
+function buildFlat() {
   const files = (book.pdfs || []).slice().sort((a, b) => (a.order || 0) - (b.order || 0));
-  if (!files.length) {
-    return '<p class="px-4 py-8 text-center text-sm text-ink-muted">Chapters are being added to this book.</p>';
-  }
-
   const chapters = (book.chapters || []).slice().sort((a, b) => (a.order || 0) - (b.order || 0));
-  let n = 0;
+  const out = [];
 
-  // Grouped by chapter when chapters exist, flat otherwise. The app does the
-  // same; PDFs with chapter === null fall into "Other chapters".
   if (chapters.length) {
-    let out = '';
     chapters.forEach((ch) => {
       const mine = files.filter((v) => String(v.chapter) === String(ch.id));
-      if (!mine.length) return;
-      out += '<div class="border-b border-line bg-canvas px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-navy">' +
-             fmt.esc(ch.title) + '</div>';
-      mine.forEach((v) => { out += pdfRow(v, ++n, !hasAccess); });
+      if (mine.length) out.push({ heading: ch.title, items: mine });
     });
     const loose = files.filter((v) => !v.chapter);
-    if (loose.length) {
-      out += '<div class="border-b border-line bg-canvas px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-navy">Other chapters</div>';
-      loose.forEach((v) => { out += pdfRow(v, ++n, !hasAccess); });
-    }
-    return out;
+    if (loose.length) out.push({ heading: chapters.length ? 'Other chapters' : null, items: loose });
+  } else if (files.length) {
+    out.push({ heading: null, items: files });
   }
-  return files.map((v) => pdfRow(v, ++n, !hasAccess)).join('');
+
+  // Flat index drives the free-preview rule, so it is assigned across groups.
+  let n = 0;
+  flat = [];
+  out.forEach((g) => {
+    g.items.forEach((v) => {
+      flat.push({
+        v: v,
+        group: g.heading,
+        n: n,
+        locked: !hasAccess && n >= FREE_PREVIEW,
+        first: flat.filter((x) => x.group === g.heading).length === 0,
+      });
+      n++;
+    });
+  });
+  return out;
+}
+
+/* ── player ────────────────────────────────────────────── */
+
+function playerMarkup() {
+  const cur = activeIndex >= 0 ? flat[activeIndex] : null;
+
+  if (!cur) {
+    // Poster state: cover art with a play affordance over it.
+    const firstPlayable = flat.find((f) => !f.locked);
+    return '' +
+      '<div class="relative aspect-video overflow-hidden rounded-xl2 bg-navy">' +
+        '<img src="' + fmt.esc(book.thumbnail_url || '') + '" alt="" class="h-full w-full object-cover opacity-70">' +
+        '<div class="absolute inset-0 grid place-items-center bg-gradient-to-t from-navy/80 via-navy/30 to-transparent">' +
+          (firstPlayable
+            ? '<button class="group flex flex-col items-center gap-3" data-play-index="' + firstPlayable.n + '">' +
+                '<span class="grid h-16 w-16 place-items-center rounded-full bg-white/95 shadow-lift transition-transform group-hover:scale-110">' +
+                  '<svg class="h-7 w-7 text-primary" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 3a2 2 0 0 1 2-2h5.6L16 5.4V17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V3Zm7 .5V6h2.5L11 3.5Z" clip-rule="evenodd"/></svg>' +
+                '</span>' +
+                '<span class="text-sm font-semibold text-white">Read free preview</span>' +
+              '</button>'
+            : '<div class="text-center">' +
+                '<span class="mx-auto grid h-14 w-14 place-items-center rounded-full bg-white/15 backdrop-blur">' +
+                  '<svg class="h-6 w-6 text-white" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 1a4 4 0 0 0-4 4v2H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-1V5a4 4 0 0 0-4-4Zm2 6V5a2 2 0 1 0-4 0v2h4Z" clip-rule="evenodd"/></svg>' +
+                '</span>' +
+                '<p class="mt-3 text-sm font-semibold text-white">Buy this book to start reading</p>' +
+              '</div>') +
+        '</div>' +
+      '</div>';
+  }
+
+  // Read-only reader. #toolbar=0&navpanes=0 hides the browser PDF viewer's
+  // own download and print buttons, and there is no download link anywhere
+  // on the page - you scroll and read, as asked.
+  //
+  // Being honest about what this is: it removes the download AFFORDANCE, it
+  // is not access control. The file URL is still reachable by anyone who
+  // opens DevTools. Signed, expiring media URLs are the actual fix and were
+  // deliberately deferred to a later pass.
+  return '' +
+    '<div class="overflow-hidden rounded-xl2 border border-line bg-white shadow-lift">' +
+      '<div class="flex items-center gap-3 border-b border-line bg-canvas px-4 py-2.5">' +
+        '<span class="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-chip text-primary">' +
+          '<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 3a2 2 0 0 1 2-2h5.6L16 5.4V17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V3Zm7 .5V6h2.5L11 3.5Z" clip-rule="evenodd"/></svg>' +
+        '</span>' +
+        '<p class="min-w-0 flex-1 truncate text-sm font-semibold text-navy">' + fmt.esc(cur.v.title) + '</p>' +
+        '<span class="shrink-0 text-xs text-ink-muted">' + (cur.n + 1) + ' / ' + flat.length + '</span>' +
+      '</div>' +
+      '<iframe class="h-[min(78vh,900px)] w-full bg-canvas" title="' + fmt.esc(cur.v.title) + '" ' +
+              'src="' + fmt.esc(cur.v.pdf_url) + '#toolbar=0&amp;navpanes=0&amp;scrollbar=1&amp;view=FitH"></iframe>' +
+    '</div>' +
+    '<div class="mt-4 flex flex-wrap items-center justify-between gap-3">' +
+      '<div class="min-w-0">' +
+        '<p class="text-xs font-semibold uppercase tracking-wider text-primary">Chapter ' + (cur.n + 1) + ' of ' + flat.length + '</p>' +
+        '<h2 class="mt-0.5 truncate text-lg">' + fmt.esc(cur.v.title) + '</h2>' +
+      '</div>' +
+      '<div class="flex shrink-0 gap-2">' +
+        (activeIndex > 0 ? '<button class="btn-ghost btn-sm" data-step="-1">Previous</button>' : '') +
+        (flat[activeIndex + 1] && !flat[activeIndex + 1].locked
+          ? '<button class="btn-primary btn-sm" data-step="1">Next chapter</button>' : '') +
+      '</div>' +
+    '</div>';
+}
+
+function renderPlayer() {
+  $('[data-player]').innerHTML = playerMarkup();
+  wirePlayer();
+  paintList();
+}
+
+function wirePlayer() {
+  $$('[data-play-index]').forEach((b) =>
+    b.addEventListener('click', () => play(Number(b.dataset.playIndex))));
+  $$('[data-step]').forEach((b) =>
+    b.addEventListener('click', () => play(activeIndex + Number(b.dataset.step))));
+}
+
+function play(n) {
+  const target = flat[n];
+  if (!target) return;
+  if (target.locked) {
+    toast('Buy this book to unlock all chapters.', 'warn');
+    return;
+  }
+  activeIndex = n;
+  renderPlayer();
+  $('[data-player]').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+/* ── curriculum list ───────────────────────────────────── */
+
+function listMarkup() {
+  if (!flat.length) {
+    return '<p class="px-5 py-10 text-center text-sm text-ink-muted">Chapters are being added to this book.</p>';
+  }
+
+  let out = '';
+  let lastGroup = '__none__';
+
+  flat.forEach((f) => {
+    if (f.group !== lastGroup) {
+      lastGroup = f.group;
+      if (f.group) {
+        const count = flat.filter((x) => x.group === f.group).length;
+        out += '<div class="flex items-center justify-between gap-3 border-y border-line bg-canvas px-5 py-2.5">' +
+                 '<span class="text-xs font-bold uppercase tracking-wider text-navy">' + fmt.esc(f.group) + '</span>' +
+                 '<span class="text-xs text-ink-muted">' + count + ' PDFs</span>' +
+               '</div>';
+      }
+    }
+
+    const on = f.n === activeIndex;
+    out +=
+      '<button class="group flex w-full items-center gap-3 border-b border-line px-5 py-3 text-left transition-colors last:border-0 ' +
+              (on ? 'bg-chip' : f.locked ? 'cursor-not-allowed opacity-80' : 'hover:bg-canvas') + '" ' +
+              'data-play-index="' + f.n + '"' + (f.locked ? ' aria-disabled="true"' : '') + '>' +
+        '<span class="grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-bold transition-colors ' +
+              (on ? 'bg-primary text-white'
+                  : f.locked ? 'bg-line text-ink-muted'
+                             : 'bg-chip text-primary group-hover:bg-primary group-hover:text-white') + '">' +
+          (f.locked
+            ? '<svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 1a4 4 0 0 0-4 4v2H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-1V5a4 4 0 0 0-4-4Zm2 6V5a2 2 0 1 0-4 0v2h4Z" clip-rule="evenodd"/></svg>'
+            : on
+              ? '<svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4Zm3 3h8v2H6V7Zm0 4h8v2H6v-2Z" clip-rule="evenodd"/></svg>'
+              : (f.n + 1)) +
+        '</span>' +
+        '<span class="min-w-0 flex-1">' +
+          '<span class="block truncate text-sm font-medium ' + (f.locked ? 'text-ink-muted' : 'text-navy') + '">' +
+            fmt.esc(f.v.title) + '</span>' +
+        '</span>' +
+        (f.locked
+          ? '<span class="shrink-0 text-xs text-ink-muted">Locked</span>'
+          : (!hasAccess ? '<span class="badge-free shrink-0">Free</span>'
+                        : '<svg class="h-4 w-4 shrink-0 text-ink-muted" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 3a2 2 0 0 1 2-2h5.6L16 5.4V17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V3Zm7 .5V6h2.5L11 3.5Z" clip-rule="evenodd"/></svg>')) +
+      '</button>';
+  });
+  return out;
+}
+
+function paintList() {
+  const host = $('[data-list]');
+  if (!host) return;
+  host.innerHTML = listMarkup();
+  $$('[data-play-index]', host).forEach((b) =>
+    b.addEventListener('click', () => play(Number(b.dataset.playIndex))));
 }
 
 /* ── reviews ───────────────────────────────────────────── */
 
-function reviewsBlock() {
+function reviewsMarkup() {
   const avg = Number(reviewData.average_rating) || 0;
   const list = reviewData.reviews || [];
 
-  // Play-Store style 5→1 breakdown, bucketed client-side from the list.
   const buckets = [0, 0, 0, 0, 0];
   list.forEach((r) => { const i = Math.round(r.rating); if (i >= 1 && i <= 5) buckets[i - 1]++; });
-  const max = Math.max(1, ...buckets);
+  const total = Math.max(1, list.length);
 
   let bars = '';
-  for (let s = 5; s >= 1; s--) {
-    const c = buckets[s - 1];
-    bars += '<div class="flex items-center gap-2">' +
-              '<span class="w-3 text-xs text-ink-muted">' + s + '</span>' +
-              '<div class="h-1.5 flex-1 overflow-hidden rounded-full bg-line">' +
-                '<div class="h-full rounded-full bg-warn" style="width:' + ((c / max) * 100) + '%"></div>' +
+  for (let st = 5; st >= 1; st--) {
+    const c = buckets[st - 1];
+    bars += '<div class="flex items-center gap-2.5">' +
+              '<span class="w-8 shrink-0 text-xs text-ink-muted">' + st + ' star</span>' +
+              '<div class="h-2 flex-1 overflow-hidden rounded-full bg-line">' +
+                '<div class="h-full rounded-full bg-warn transition-all" style="width:' + ((c / total) * 100) + '%"></div>' +
               '</div>' +
-              '<span class="w-6 text-right text-xs text-ink-muted">' + c + '</span>' +
+              '<span class="w-6 shrink-0 text-right text-xs text-ink-muted">' + c + '</span>' +
             '</div>';
   }
 
   const cards = list.length
     ? list.map((r) =>
-        '<article class="border-b border-line py-5 last:border-0">' +
+        '<article class="border-b border-line py-5 last:border-0 last:pb-0">' +
           '<div class="flex items-start gap-3">' +
             '<span class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand-grad text-xs font-bold text-white">' +
               fmt.esc(fmt.initials(r.user_name)) + '</span>' +
@@ -143,7 +266,7 @@ function reviewsBlock() {
               '</div>' +
               (r.comment ? '<p class="prose-brand mt-1.5 text-sm">' + fmt.esc(r.comment) + '</p>' : '') +
               (r.admin_reply
-                ? '<div class="mt-3 rounded-xl2 border border-line bg-canvas p-3">' +
+                ? '<div class="mt-3 rounded-xl2 border-l-2 border-primary bg-canvas p-3">' +
                     '<div class="flex items-center gap-2">' +
                       '<span class="grid h-5 w-5 place-items-center rounded-full bg-primary text-[9px] font-bold text-white">I</span>' +
                       '<span class="text-xs font-bold text-primary">InfuMedz</span>' +
@@ -156,16 +279,16 @@ function reviewsBlock() {
           '</div>' +
         '</article>')
       .join('')
-    : '<p class="py-8 text-center text-sm text-ink-muted">No reviews yet. Be the first once you buy it.</p>';
+    : '<p class="py-10 text-center text-sm text-ink-muted">No reviews yet. Be the first once you buy it.</p>';
 
   const composer = (hasAccess && session.isLoggedIn)
-    ? '<div class="card mt-6 p-5">' +
+    ? '<div class="mt-6 rounded-xl2 border border-line bg-canvas p-5">' +
         '<h4 class="text-sm">Write a review</h4>' +
         '<div class="mt-3 flex items-center gap-1" data-rate role="radiogroup" aria-label="Your rating">' +
           [1,2,3,4,5].map((i) =>
-            '<button type="button" data-star="' + i + '" role="radio" aria-checked="false" aria-label="' + i + ' star' + (i>1?'s':'') + '" ' +
+            '<button type="button" data-star="' + i + '" role="radio" aria-checked="false" aria-label="' + i + ' star' + (i > 1 ? 's' : '') + '" ' +
                     'class="p-0.5 text-line transition-colors hover:text-warn">' +
-              '<svg class="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path d="M10 1.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9 4.8 17.6l1-5.8L1.5 7.7l5.9-.9L10 1.5z"/></svg>' +
+              '<svg class="h-7 w-7" viewBox="0 0 20 20" fill="currentColor"><path d="M10 1.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9 4.8 17.6l1-5.8L1.5 7.7l5.9-.9L10 1.5z"/></svg>' +
             '</button>').join('') +
         '</div>' +
         '<textarea class="field mt-3" rows="3" placeholder="What did you think of this book?" data-comment></textarea>' +
@@ -174,139 +297,154 @@ function reviewsBlock() {
     : '';
 
   return '' +
-    '<section class="card p-6" id="reviews">' +
-      '<h3 class="text-lg">Ratings &amp; reviews</h3>' +
-      '<div class="mt-4 grid gap-6 sm:grid-cols-[auto_1fr] sm:gap-10">' +
-        '<div class="text-center sm:text-left">' +
-          '<p class="text-5xl font-black leading-none text-navy">' + avg.toFixed(1) + '</p>' +
-          '<div class="mt-2 flex justify-center sm:justify-start">' + stars(avg) + '</div>' +
-          '<p class="mt-1 text-xs text-ink-muted">' + (reviewData.total_reviews || 0) +
-            ((reviewData.total_reviews === 1) ? ' review' : ' reviews') + '</p>' +
-        '</div>' +
-        '<div class="space-y-1.5">' + bars + '</div>' +
+    '<div class="grid gap-8 border-b border-line pb-6 sm:grid-cols-[auto_1fr] sm:gap-12">' +
+      '<div class="text-center sm:text-left">' +
+        '<p class="text-5xl font-black leading-none text-navy">' + avg.toFixed(1) + '</p>' +
+        '<div class="mt-2 flex justify-center sm:justify-start">' + stars(avg) + '</div>' +
+        '<p class="mt-1.5 text-xs text-ink-muted">' + (reviewData.total_reviews || 0) +
+          (reviewData.total_reviews === 1 ? ' review' : ' reviews') + '</p>' +
       '</div>' +
-      '<div class="mt-6 border-t border-line">' + cards + '</div>' +
-      composer +
-    '</section>';
+      '<div class="space-y-2">' + bars + '</div>' +
+    '</div>' +
+    '<div>' + cards + '</div>' + composer;
 }
 
-/* ── page render ───────────────────────────────────────── */
+/* ── page ──────────────────────────────────────────────── */
 
 function render() {
-  const files = book.pdfs || [];
+  buildFlat();
   const price = Number(book.price) || 0;
 
   document.querySelector('[data-title]').textContent = book.title + ' — InfuMedz';
   document.querySelector('[data-desc]').setAttribute('content', String(book.description || '').slice(0, 155));
 
   const cta = hasAccess
-    ? '<div class="badge-own w-full justify-center py-2.5 text-sm">You own this book</div>'
+    ? '<a href="library.html" class="btn-primary btn-lg w-full">Go to my library</a>'
     : '<button class="btn-primary btn-lg w-full" data-buy>' +
-        (price === 0 ? 'Get free access' : 'Buy for ' + fmt.price(price)) +
-      '</button>';
+        (price === 0 ? 'Get free access' : 'Buy for ' + fmt.price(price)) + '</button>';
 
   $('[data-main]').innerHTML = '' +
-    // ── hero ──
-    '<section class="border-b border-line bg-white">' +
-      '<div class="shell py-8 lg:py-10">' +
-        '<nav class="mb-4 flex items-center gap-2 text-xs text-ink-muted" aria-label="Breadcrumb">' +
-          '<a href="index.html" class="hover:text-primary">Home</a><span aria-hidden="true">/</span>' +
-          '<a href="books.html" class="hover:text-primary">Books</a><span aria-hidden="true">/</span>' +
-          '<span class="truncate font-medium text-navy">' + fmt.esc(book.title) + '</span>' +
+    // ═══ dark hero band ═══
+    '<section class="relative overflow-hidden bg-navy">' +
+      '<div aria-hidden="true" class="pointer-events-none absolute -right-32 -top-32 h-96 w-96 rounded-full bg-cyan/20 blur-3xl"></div>' +
+      '<div class="shell relative py-10 lg:py-12">' +
+        '<nav class="mb-4 flex flex-wrap items-center gap-2 text-xs text-white/60" aria-label="Breadcrumb">' +
+          '<a href="index.html" class="hover:text-white">Home</a><span aria-hidden="true">/</span>' +
+          '<a href="books.html" class="hover:text-white">Books</a><span aria-hidden="true">/</span>' +
+          '<span class="truncate font-medium text-white/90">' + fmt.esc(book.title) + '</span>' +
         '</nav>' +
-        '<div class="grid gap-8 lg:grid-cols-[1fr_340px]">' +
-          '<div>' +
-            '<div class="mb-3 flex flex-wrap items-center gap-2">' +
-              (book.category_name ? '<span class="badge-cat">' + fmt.esc(book.category_name) + '</span>' : '') +
-              '<span class="text-xs text-ink-muted">' + files.length + (files.length === 1 ? ' PDF' : ' PDFs') + '</span>' +
-              (book.buyers_count ? '<span class="text-xs text-ink-muted">&middot; ' + book.buyers_count + ' readers</span>' : '') +
-            '</div>' +
-            '<h1 class="text-2xl sm:text-3xl lg:text-4xl">' + fmt.esc(book.title) + '</h1>' +
-            '<p class="prose-brand mt-3 max-w-2xl">' + fmt.esc(book.description) + '</p>' +
-            '<div class="mt-4 flex items-center gap-2">' +
-              stars(reviewData.average_rating) +
-              '<a href="#reviews" class="text-sm text-ink-muted hover:text-primary">' +
-                (Number(reviewData.average_rating) || 0).toFixed(1) + ' (' + (reviewData.total_reviews || 0) + ')</a>' +
-            '</div>' +
+        '<div class="max-w-3xl">' +
+          '<div class="mb-3 flex flex-wrap items-center gap-2">' +
+            (book.category_name ? '<span class="badge bg-white/15 text-white backdrop-blur">' + fmt.esc(book.category_name) + '</span>' : '') +
+            (hasAccess ? '<span class="badge bg-ok text-white">Owned</span>' : '') +
           '</div>' +
-          // purchase card
-          '<aside class="lg:sticky lg:top-24 lg:self-start">' +
-            '<div class="card overflow-hidden">' +
-              '<div class="aspect-video bg-chip">' +
-                '<img src="' + fmt.esc(book.thumbnail_url || '') + '" alt="" class="h-full w-full object-cover">' +
-              '</div>' +
-              '<div class="p-5">' +
-                (hasAccess ? '' : '<p class="mb-3 text-3xl font-black text-navy">' + fmt.price(price) + '</p>') +
-                cta +
-                '<ul class="mt-4 space-y-2 text-sm text-ink-soft">' +
-                  '<li class="flex gap-2"><span class="text-ok">&check;</span> Lifetime access</li>' +
-                  '<li class="flex gap-2"><span class="text-ok">&check;</span> Read on web and mobile app</li>' +
-                  '<li class="flex gap-2"><span class="text-ok">&check;</span> Organised by chapter</li>' +
-                '</ul>' +
-              '</div>' +
-            '</div>' +
-          '</aside>' +
+          '<h1 class="text-2xl text-white sm:text-3xl lg:text-4xl">' + fmt.esc(book.title) + '</h1>' +
+          '<p class="mt-3 max-w-2xl leading-relaxed text-white/75">' + fmt.esc(book.description) + '</p>' +
+          '<div class="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-white/70">' +
+            '<span class="flex items-center gap-1.5">' + stars(reviewData.average_rating, 'h-4 w-4') +
+              '<span class="font-semibold text-white">' + (Number(reviewData.average_rating) || 0).toFixed(1) + '</span>' +
+              '<span>(' + (reviewData.total_reviews || 0) + ')</span></span>' +
+            '<span>' + flat.length + ' PDFs</span>' +
+            (book.buyers_count ? '<span>' + book.buyers_count + ' readers</span>' : '') +
+            (hasAccess ? '' : '<span class="text-free">First ' + FREE_PREVIEW + ' free</span>') +
+          '</div>' +
         '</div>' +
       '</div>' +
     '</section>' +
 
-    // ── body ──
-    '<section class="section">' +
-      '<div class="shell grid gap-8 lg:grid-cols-[1fr_340px]">' +
-        '<div class="space-y-6">' +
-          '<div data-player-slot></div>' +
-          '<div class="card overflow-hidden">' +
-            '<div class="border-b border-line px-4 py-3">' +
-              '<h2 class="text-base">What is inside</h2>' +
-              '<p class="text-xs text-ink-muted">' + files.length + ' PDFs' +
-                (hasAccess ? '' : ' &middot; first ' + FREE_PREVIEW + ' free to read') + '</p>' +
-            '</div>' +
-            pdfList() +
+    // ═══ body ═══
+    '<section class="shell grid items-start gap-8 py-8 lg:grid-cols-[minmax(0,1fr)_350px] lg:py-10">' +
+      '<div class="min-w-0">' +
+        '<div data-player></div>' +
+
+        // tabs
+        '<div class="mt-8 border-b border-line">' +
+          '<div class="flex gap-6" role="tablist">' +
+            '<button role="tab" data-tab="curriculum" class="border-b-2 pb-3 text-sm font-semibold transition-colors">Curriculum</button>' +
+            '<button role="tab" data-tab="reviews" class="border-b-2 pb-3 text-sm font-semibold transition-colors">Reviews (' + (reviewData.total_reviews || 0) + ')</button>' +
+            '<button role="tab" data-tab="about" class="border-b-2 pb-3 text-sm font-semibold transition-colors">About</button>' +
           '</div>' +
-          reviewsBlock() +
         '</div>' +
-        '<div></div>' +
+
+        '<div data-pane="curriculum" class="mt-5">' +
+          '<div class="card overflow-hidden"><div data-list></div></div>' +
+        '</div>' +
+
+        '<div data-pane="reviews" class="mt-5 hidden"><div class="card p-6">' + reviewsMarkup() + '</div></div>' +
+
+        '<div data-pane="about" class="mt-5 hidden"><div class="card p-6">' +
+          '<h3 class="text-base">About this book</h3>' +
+          '<p class="prose-brand mt-2">' + fmt.esc(book.description) + '</p>' +
+          '<h4 class="mt-6 text-sm">What you get</h4>' +
+          '<ul class="mt-2 space-y-2">' +
+            ['<strong>' + flat.length + '</strong> PDF chapters, organised and searchable',
+             'Lifetime access on this website and the Android app',
+             'Read in the browser - no download needed',
+             'New chapters added to this book at no extra cost']
+              .map((t) => '<li class="flex gap-2.5 text-sm text-ink-soft">' +
+                '<svg class="mt-0.5 h-4 w-4 shrink-0 text-ok" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="m16.7 5.7-8.4 8.4-4.9-5 1.4-1.4 3.5 3.5 7-7 1.4 1.5Z" clip-rule="evenodd"/></svg>' +
+                '<span>' + t + '</span></li>').join('') +
+          '</ul>' +
+        '</div></div>' +
       '</div>' +
+
+      // ═══ sticky purchase rail ═══
+      '<aside class="lg:sticky lg:top-24">' +
+        '<div class="card overflow-hidden">' +
+          '<div class="aspect-video bg-chip">' +
+            '<img src="' + fmt.esc(book.thumbnail_url || '') + '" alt="" class="h-full w-full object-cover">' +
+          '</div>' +
+          '<div class="p-5">' +
+            (hasAccess
+              ? '<p class="mb-3 flex items-center gap-2 text-sm font-semibold text-ok">' +
+                  '<svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm3.7-9.3-4.2 4.2-2.2-2.2 1.4-1.4.8.8 2.8-2.8 1.4 1.4Z" clip-rule="evenodd"/></svg>' +
+                  'You own this book</p>'
+              : '<div class="mb-4 flex items-end gap-2">' +
+                  '<span class="text-3xl font-black text-navy">' + fmt.price(price) + '</span>' +
+                  '<span class="pb-1 text-xs text-ink-muted">one-time</span></div>') +
+            cta +
+            '<ul class="mt-5 space-y-2.5 border-t border-line pt-4 text-sm text-ink-soft">' +
+              ['Lifetime access', 'Web and Android app', 'Read online, no download', 'Secure UPI / card payment']
+                .map((t) => '<li class="flex items-center gap-2.5">' +
+                  '<svg class="h-4 w-4 shrink-0 text-ok" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="m16.7 5.7-8.4 8.4-4.9-5 1.4-1.4 3.5 3.5 7-7 1.4 1.5Z" clip-rule="evenodd"/></svg>' +
+                  t + '</li>').join('') +
+            '</ul>' +
+            '<p class="mt-4 border-t border-line pt-4 text-xs text-ink-muted">' +
+              'Questions before buying? <a href="support.html" class="font-semibold text-primary hover:underline">Talk to us</a>.</p>' +
+          '</div>' +
+        '</div>' +
+      '</aside>' +
     '</section>';
 
-  wire();
+  renderPlayer();
+  wireTabs();
+  wireBuy();
+  wireReview();
 }
 
-/* ── interactions ──────────────────────────────────────── */
-
-function wire() {
-  // Open a PDF in an inline reader. The browser's own PDF viewer handles
-  // paging, zoom and search better than anything worth hand-rolling.
-  document.querySelectorAll('[data-open]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const url = btn.dataset.open;
-      const title = btn.dataset.vtitle;
-      const slot = $('[data-player-slot]');
-      slot.innerHTML =
-        '<div class="card overflow-hidden">' +
-          '<div class="flex items-center justify-between gap-3 border-b border-line px-4 py-3">' +
-            '<p class="truncate text-sm font-semibold text-navy">' + fmt.esc(title) + '</p>' +
-            '<a href="' + fmt.esc(url) + '" target="_blank" rel="noopener" class="btn-ghost btn-sm shrink-0">Full screen</a>' +
-          '</div>' +
-          '<iframe class="h-[78vh] w-full bg-canvas" src="' + fmt.esc(url) + '#view=FitH" title="' + fmt.esc(title) + '"></iframe>' +
-        '</div>';
-      slot.scrollIntoView({ behavior: 'smooth', block: 'start' });
+function wireTabs() {
+  const show = (which) => {
+    $$('[data-tab]').forEach((b) => {
+      const on = b.dataset.tab === which;
+      b.className = 'border-b-2 pb-3 text-sm font-semibold transition-colors ' +
+        (on ? 'border-primary text-primary' : 'border-transparent text-ink-muted hover:text-navy');
+      b.setAttribute('aria-selected', String(on));
     });
-  });
+    $$('[data-pane]').forEach((p) => p.classList.toggle('hidden', p.dataset.pane !== which));
+  };
+  $$('[data-tab]').forEach((b) => b.addEventListener('click', () => show(b.dataset.tab)));
+  show(location.hash === '#reviews' ? 'reviews' : 'curriculum');
+}
 
-  // Buy.
-  const buy = $('[data-buy]');
-  if (buy) buy.addEventListener('click', startCheckout);
-
-  // Review composer.
+function wireReview() {
   let rating = 0;
-  const rateBox = $('[data-rate]');
-  if (rateBox) {
-    rateBox.addEventListener('click', (e) => {
+  const box = $('[data-rate]');
+  if (box) {
+    box.addEventListener('click', (e) => {
       const b = e.target.closest('[data-star]');
       if (!b) return;
       rating = Number(b.dataset.star);
-      Array.from(rateBox.querySelectorAll('[data-star]')).forEach((s) => {
+      $$('[data-star]', box).forEach((s) => {
         const on = Number(s.dataset.star) <= rating;
         s.className = 'p-0.5 transition-colors ' + (on ? 'text-warn' : 'text-line hover:text-warn');
         s.setAttribute('aria-checked', String(Number(s.dataset.star) === rating));
@@ -321,14 +459,13 @@ function wire() {
       submit.disabled = true;
       try {
         await api.addBookReview({
-          user: session.userId,
-          book_id: book.id,
-          rating,
-          comment: ($('[data-comment]').value || '').trim(),
+          user: session.userId, book_id: book.id,
+          rating, comment: ($('[data-comment]').value || '').trim(),
         });
         toast('Thanks — your review is posted.', 'success');
         reviewData = await api.bookReviews(id);
         render();
+        location.hash = '#reviews';
       } catch (e) {
         toast(e.message || 'Could not post your review.', 'error');
         submit.disabled = false;
@@ -337,7 +474,17 @@ function wire() {
   }
 }
 
-/* ── Razorpay checkout ─────────────────────────────────── */
+/* ── checkout ──────────────────────────────────────────── */
+
+function wireBuy() {
+  const buy = $('[data-buy]');
+  if (buy) buy.addEventListener('click', startCheckout);
+}
+
+function resetBuy() {
+  const b = $('[data-buy]');
+  if (b) { b.disabled = false; b.textContent = 'Buy for ' + fmt.price(book.price); }
+}
 
 async function startCheckout() {
   if (!session.requireLogin()) return;
@@ -350,19 +497,18 @@ async function startCheckout() {
   try {
     order = await api.createBookOrder(session.userId, book.id);
   } catch (e) {
-    btn.disabled = false;
-    btn.textContent = 'Buy for ' + fmt.price(book.price);
-    // A 500 here currently means the backend's Razorpay credentials are
-    // rejected. Say something a customer can act on rather than "500".
-    const msg = (e instanceof ApiError && e.status >= 500)
-      ? 'Payments are temporarily unavailable. Please try again shortly or contact support.'
-      : (e.message || 'Could not start the payment.');
-    return toast(msg, 'error');
+    resetBuy();
+    // A 500 here means the backend's Razorpay credentials are being rejected.
+    // Say something the customer can act on rather than echoing "500".
+    return toast(
+      (e instanceof ApiError && e.status >= 500)
+        ? 'Payments are temporarily unavailable. Please try again shortly or contact support.'
+        : (e.message || 'Could not start the payment.'),
+      'error');
   }
 
   if (!window.Razorpay) {
-    btn.disabled = false;
-    btn.textContent = 'Buy for ' + fmt.price(book.price);
+    resetBuy();
     return toast('Payment library failed to load. Check your connection and retry.', 'error');
   }
 
@@ -386,28 +532,24 @@ async function startCheckout() {
           payment_id: res.razorpay_payment_id,
           signature: res.razorpay_signature,
         });
-        toast('Payment confirmed — the book is now in your library.', 'success');
+        toast('Payment confirmed — all chapters are unlocked.', 'success');
         hasAccess = true;
+        activeIndex = -1;
         render();
       } catch (e) {
-        // Verification failing after money moved is the one case that must
-        // never be silently swallowed - the app v1 bug was exactly this.
+        // Verification failing after money moved must never be swallowed -
+        // the v1 app bug was exactly this, telling people "Payment received"
+        // when verification had been rejected.
         toast('Payment taken but not yet confirmed. Contact support with order ' +
               res.razorpay_order_id + '.', 'error', 12000);
       }
     },
-    modal: {
-      ondismiss: () => {
-        btn.disabled = false;
-        btn.textContent = 'Buy for ' + fmt.price(book.price);
-      },
-    },
+    modal: { ondismiss: resetBuy },
   });
 
   rzp.on('payment.failed', (r) => {
     toast((r.error && r.error.description) || 'Payment failed.', 'error');
-    btn.disabled = false;
-    btn.textContent = 'Buy for ' + fmt.price(book.price);
+    resetBuy();
   });
 
   rzp.open();

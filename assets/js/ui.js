@@ -14,6 +14,35 @@
 
 import { session } from './session.js';
 
+/* ---- paths ---- */
+
+/** admin/index.html sits one level down, so shared assets and links need a
+    '../' there and nothing at the root. Worked out once, here, instead of
+    being hardcoded per page. */
+export const rel = (function () {
+  var inSub = location.pathname.indexOf('/admin/') >= 0;
+  return function (p) { return inSub ? '../' + p : p; };
+})();
+
+/** The brand mark. logo.jpeg sits beside index.html; if it is absent or
+    fails to decode, onerror removes the <img> and the gradient lettermark
+    underneath shows through - so the header can never display a broken
+    image icon. */
+function logoMark(size) {
+  var px = size || 'h-9 w-9';
+  return '<span class="relative grid ' + px + ' shrink-0 place-items-center overflow-hidden rounded-xl2 bg-brand-grad">' +
+           '<span class="text-base font-black text-white">I</span>' +
+           '<img src="' + rel('logo.jpeg') + '" alt="" class="absolute inset-0 h-full w-full object-cover" onerror="this.remove()">' +
+         '</span>';
+}
+
+export function brandLockup(href) {
+  return '<a href="' + rel(href || 'index.html') + '" class="flex shrink-0 items-center gap-2.5">' +
+           logoMark() +
+           '<span class="text-lg font-black tracking-tight text-navy">Infu<span class="text-primary">Medz</span></span>' +
+         '</a>';
+}
+
 /* ── formatting ──────────────────────────────────────────── */
 
 export const fmt = {
@@ -91,10 +120,12 @@ export function toast(message, kind = 'info', ms = 4000) {
 /* ── header ──────────────────────────────────────────────── */
 
 const NAV = [
-  { href: 'index.html',   label: 'Home' },
-  { href: 'courses.html', label: 'Courses' },
-  { href: 'books.html',   label: 'Books' },
-  { href: 'library.html', label: 'My Library', auth: true },
+  { href: 'index.html',    label: 'Home' },
+  { href: 'courses.html',  label: 'Courses' },
+  { href: 'books.html',    label: 'Books' },
+  { href: 'services.html', label: 'Services' },
+  { href: 'about.html',    label: 'About' },
+  { href: 'library.html',  label: 'My Library', auth: true },
 ];
 
 export function renderHeader(active) {
@@ -105,7 +136,7 @@ export function renderHeader(active) {
     .filter((n) => !n.auth || session.isLoggedIn)
     .map((n) => {
       const cls = n.href === here ? 'nav-link nav-link-active' : 'nav-link';
-      return '<a href="' + n.href + '" class="' + cls + '">' + n.label + '</a>';
+      return '<a href="' + rel(n.href) + '" class="' + cls + '">' + n.label + '</a>';
     })
     .join('');
 
@@ -124,23 +155,21 @@ export function renderHeader(active) {
             '<p class="truncate text-sm font-semibold text-navy">' + fmt.esc(user.name) + '</p>' +
             '<p class="truncate text-xs text-ink-muted">' + fmt.esc(user.email) + '</p>' +
           '</div>' +
-          '<a href="library.html" class="block px-4 py-2 text-sm text-ink-soft hover:bg-chip hover:text-primary">My Library</a>' +
-          '<a href="support.html" class="block px-4 py-2 text-sm text-ink-soft hover:bg-chip hover:text-primary">Help &amp; Support</a>' +
+          '<a href="' + rel('library.html') + '" class="block px-4 py-2 text-sm text-ink-soft hover:bg-chip hover:text-primary">My Library</a>' +
+          '<a href="' + rel('profile.html') + '" class="block px-4 py-2 text-sm text-ink-soft hover:bg-chip hover:text-primary">Profile</a>' +
+          '<a href="' + rel('support.html') + '" class="block px-4 py-2 text-sm text-ink-soft hover:bg-chip hover:text-primary">Help &amp; Support</a>' +
           '<button class="block w-full px-4 py-2 text-left text-sm text-bad hover:bg-bad/5" data-logout>Sign out</button>' +
         '</div>' +
       '</div>'
     : '<div class="flex items-center gap-2">' +
-        '<a href="login.html" class="btn-ghost btn-sm">Sign in</a>' +
-        '<a href="login.html#signup" class="btn-primary btn-sm">Get started</a>' +
+        '<a href="' + rel('login.html') + '" class="btn-ghost btn-sm">Sign in</a>' +
+        '<a href="' + rel('login.html') + '#signup" class="btn-primary btn-sm">Get started</a>' +
       '</div>';
 
   const html =
     '<header class="sticky top-0 z-50 border-b border-line bg-white/90 backdrop-blur-md">' +
       '<div class="shell flex h-16 items-center justify-between gap-6">' +
-        '<a href="index.html" class="flex shrink-0 items-center gap-2.5">' +
-          '<span class="grid h-9 w-9 place-items-center rounded-xl2 bg-brand-grad text-base font-black text-white">I</span>' +
-          '<span class="text-lg font-black tracking-tight text-navy">Infu<span class="text-primary">Medz</span></span>' +
-        '</a>' +
+        brandLockup('index.html') +
         '<nav class="hidden items-center gap-7 md:flex" aria-label="Main">' + links + '</nav>' +
         '<div class="flex items-center gap-3">' +
           account +
@@ -153,7 +182,7 @@ export function renderHeader(active) {
       '<div class="hidden border-t border-line bg-white md:hidden" data-mobile-nav>' +
         '<nav class="shell flex flex-col py-2" aria-label="Mobile">' +
           NAV.filter((n) => !n.auth || session.isLoggedIn)
-             .map((n) => '<a href="' + n.href + '" class="py-2.5 text-sm font-medium text-ink-soft hover:text-primary">' + n.label + '</a>')
+             .map((n) => '<a href="' + rel(n.href) + '" class="py-2.5 text-sm font-medium text-ink-soft hover:text-primary">' + n.label + '</a>')
              .join('') +
         '</nav>' +
       '</div>' +
@@ -188,7 +217,7 @@ function wireHeader() {
   if (logout) {
     logout.addEventListener('click', () => {
       session.logout();
-      location.href = 'index.html';
+      location.href = rel('index.html');
     });
   }
 
@@ -210,34 +239,33 @@ export function renderFooter() {
     '<footer class="mt-16 border-t border-line bg-white">' +
       '<div class="shell grid gap-10 py-12 sm:grid-cols-2 lg:grid-cols-4">' +
         '<div>' +
-          '<div class="mb-3 flex items-center gap-2.5">' +
-            '<span class="grid h-9 w-9 place-items-center rounded-xl2 bg-brand-grad text-base font-black text-white">I</span>' +
-            '<span class="text-lg font-black tracking-tight text-navy">Infu<span class="text-primary">Medz</span></span>' +
-          '</div>' +
+          '<div class="mb-3">' + brandLockup('index.html') + '</div>' +
           '<p class="prose-brand max-w-xs text-sm">Bridging strong theoretical foundations and real-world clinical practice for medical postgraduates.</p>' +
         '</div>' +
         '<div>' +
           '<h4 class="mb-3 text-sm font-bold text-navy">Learn</h4>' +
           '<ul class="space-y-2 text-sm">' +
-            '<li><a href="courses.html" class="text-ink-soft hover:text-primary">Video Courses</a></li>' +
-            '<li><a href="books.html" class="text-ink-soft hover:text-primary">Books &amp; Notes</a></li>' +
-            '<li><a href="library.html" class="text-ink-soft hover:text-primary">My Library</a></li>' +
+            '<li><a href="' + rel('courses.html') + '" class="text-ink-soft hover:text-primary">Video Courses</a></li>' +
+            '<li><a href="' + rel('books.html') + '" class="text-ink-soft hover:text-primary">Books &amp; Notes</a></li>' +
+            '<li><a href="' + rel('services.html') + '" class="text-ink-soft hover:text-primary">Thesis &amp; Publication</a></li>' +
+            '<li><a href="' + rel('library.html') + '" class="text-ink-soft hover:text-primary">My Library</a></li>' +
           '</ul>' +
         '</div>' +
         '<div>' +
           '<h4 class="mb-3 text-sm font-bold text-navy">Support</h4>' +
           '<ul class="space-y-2 text-sm">' +
-            '<li><a href="support.html" class="text-ink-soft hover:text-primary">Help Centre</a></li>' +
-            '<li><a href="support.html#faq" class="text-ink-soft hover:text-primary">FAQs</a></li>' +
-            '<li><a href="support.html#contact" class="text-ink-soft hover:text-primary">Contact Us</a></li>' +
+            '<li><a href="' + rel('support.html') + '" class="text-ink-soft hover:text-primary">Help Centre</a></li>' +
+            '<li><a href="' + rel('about.html') + '" class="text-ink-soft hover:text-primary">About Us</a></li>' +
+            '<li><a href="tel:+919381740718" class="text-ink-soft hover:text-primary">+91 93817 40718</a></li>' +
+            '<li><a href="mailto:infusionmedzzone@gmail.com" class="break-all text-ink-soft hover:text-primary">infusionmedzzone@gmail.com</a></li>' +
           '</ul>' +
         '</div>' +
         '<div>' +
           '<h4 class="mb-3 text-sm font-bold text-navy">Legal</h4>' +
           '<ul class="space-y-2 text-sm">' +
-            '<li><a href="privacy.html" class="text-ink-soft hover:text-primary">Privacy Policy</a></li>' +
-            '<li><a href="terms.html" class="text-ink-soft hover:text-primary">Terms of Service</a></li>' +
-            '<li><a href="refund.html" class="text-ink-soft hover:text-primary">Refund Policy</a></li>' +
+            '<li><a href="' + rel('privacy.html') + '" class="text-ink-soft hover:text-primary">Privacy Policy</a></li>' +
+            '<li><a href="' + rel('terms.html') + '" class="text-ink-soft hover:text-primary">Terms of Service</a></li>' +
+            '<li><a href="' + rel('refund.html') + '" class="text-ink-soft hover:text-primary">Refund Policy</a></li>' +
           '</ul>' +
         '</div>' +
       '</div>' +

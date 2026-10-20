@@ -1,6 +1,6 @@
 # InfuMedz website
 
-Static website for **infusionmedz.com**, built for GitHub Pages. Talks to the
+Static website for **infumedz.chandus7.in**, built for GitHub Pages. Talks to the
 existing Django backend at `api.chandus7.in` — the **same database and the same
 APIs as the mobile app**. Nothing here has its own backend.
 
@@ -56,7 +56,7 @@ Then open <http://localhost:4173>.
 
 1. Push this folder to a repo (contents at the repo root, not nested).
 2. **Settings → Pages →** Source: *Deploy from a branch*, branch `main`, folder `/ (root)`.
-3. Custom domain: `infusionmedz.com`. `CNAME` is already in the repo.
+3. Custom domain: `infumedz.chandus7.in`. `CNAME` is already in the repo.
 4. At your DNS provider, point the apex at GitHub Pages:
    - `A` records → `185.199.108.153`, `185.199.109.153`, `185.199.110.153`, `185.199.111.153`
    - or `ALIAS`/`ANAME` → `<username>.github.io`
@@ -76,13 +76,41 @@ file here.
 
 | file | route | notes |
 |---|---|---|
-| `index.html` | `/` | Hero copy and image come from the admin-managed `app-banner/` record |
+| `index.html` | `/` | Admin's banner carousel (3s auto-advance), admin-picked popular courses/books, live stats, real testimonials |
 | `courses.html` | `/courses.html` | Filter by speciality and price, search, sort |
-| `course.html` | `/course.html?id=…` | Lectures locked until `check-access/` says otherwise; Razorpay checkout; reviews |
-| `books.html` / `book.html` | | Same as above; PDFs open in an inline reader |
-| `library.html` | | Signed-in only; purchases + notifications |
-| `login.html` | | Sign in / create account, tabbed |
+| `course.html` | `/course.html?id=…` | Dark hero, inline player, tabbed curriculum/reviews/about, sticky purchase rail, Razorpay checkout |
+| `books.html` / `book.html` | | Same layout; PDFs open in a **read-only** inline reader |
+| `library.html` | | Signed-in only; purchases |
+| `profile.html` | | Account details, notifications, delete account |
+| `support.html` | | Chat assistant, FAQ accordion, ticket form, contact rail |
+| `services.html` | | Thesis & publication assistance |
+| `about.html` | | Story, live numbers, programmes, contact |
+| `login.html` | | Sign in / create account + Google Sign-In |
 | `admin/index.html` | **`/admin/`** | Token-gated console |
+
+### Free preview
+
+First **2** lectures per course and **2** PDFs per book are free for everyone;
+the rest unlock once `check-access/` confirms the purchase. This mirrors the
+app exactly — `course_detail_screen.dart:525`, `flatIndex >= 2 && _isLocked`.
+The constant is `FREE_PREVIEW` at the top of `course.html`; change it there
+and re-run `python src/make_book_page.py` so the book page follows.
+
+### PDFs are read-only
+
+The reader embeds the PDF with `#toolbar=0&navpanes=0`, which hides the
+browser viewer's download and print buttons, and there is no download link
+anywhere on the page.
+
+**Be clear about what that is:** it removes the download *affordance*. It is
+not access control — the file URL is still reachable from DevTools. Signed,
+expiring media URLs are the real fix and were deliberately deferred.
+
+### Logo
+
+`logo.jpeg` goes beside `index.html`. If it is missing the gradient
+lettermark shows instead, so a missing file never produces a broken image.
+Referenced through `rel()` in `ui.js`, which adds `../` inside `/admin/`.
 
 `books.html` and `book.html` are **generated** from their course counterparts by
 `src/make_book_page.py`, so the two never drift apart. Edit the course page, then:
@@ -132,8 +160,12 @@ moment the backend does; it shows a readable message instead of "500" until then
   from DevTools and share it. Agreed to ship as-is and add signed expiring URLs
   in a later pass — the same HMAC approach as the upload tokens.
 - **CORS is `*`.** Fine while the admin API is token-protected; worth narrowing
-  to `infusionmedz.com` once enforcement is on.
-- **`support.html`, `privacy.html`, `terms.html`, `refund.html` do not exist yet**
-  and the footer links to them. Privacy and Terms are also outstanding for the
-  Play Store listing. Terms still need the refund window and jurisdiction city
+  to `infumedz.chandus7.in` once enforcement is on.
+- **`privacy.html`, `terms.html`, `refund.html` do not exist yet** and the
+  footer links to them. Privacy and Terms are also outstanding for the Play
+  Store listing. Terms still need the refund window and jurisdiction city
   confirmed before they can be written.
+- **Google Sign-In needs one console step**: add `https://infumedz.chandus7.in`
+  to *Authorised JavaScript origins* on the OAuth client in Google Cloud
+  Console. If that client is an Android type, a Web client ID is needed and
+  the backend must accept both audiences.

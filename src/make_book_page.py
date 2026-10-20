@@ -1,11 +1,11 @@
 # Generates book.html from course.html.
 #
-# The two detail pages are the same page with a different noun: videos become
-# PDFs, the inline <video> becomes an inline PDF reader, and the endpoints
-# swap. Deriving one from the other keeps them from drifting apart, which is
-# exactly how the app ended up with three visual identities in v1.
+# The two detail pages share one layout: dark hero band, viewer, tabbed
+# curriculum/reviews/about, sticky purchase rail. Only the noun and the
+# viewer differ - a <video> element becomes an embedded PDF reader. Deriving
+# one from the other is what keeps them from drifting apart.
 #
-# Run from the project root:  node/python src/make_book_page.py
+# Run from the project root:   python src/make_book_page.py
 
 import os
 import re
@@ -15,165 +15,216 @@ src = os.path.join(ROOT, "course.html")
 dst = os.path.join(ROOT, "book.html")
 
 s = open(src, encoding="utf-8").read()
-
-REPS = [
-    # ── head ──
-    ("<title data-title>Course — InfuMedz</title>",
-     "<title data-title>Book — InfuMedz</title>"),
-    ('content="Video lecture course on InfuMedz."',
-     'content="Reference book and notes on InfuMedz."'),
-    ("boot('courses.html');", "boot('books.html');"),
-
-    # ── missing-id guard ──
-    ("emptyState('No course selected', 'That link is missing a course id.',",
-     "emptyState('No book selected', 'That link is missing a book id.',"),
-    ('\'<a href="courses.html" class="btn-primary btn-sm">Browse courses</a>\') + \'</div>\';',
-     '\'<a href="books.html" class="btn-primary btn-sm">Browse books</a>\') + \'</div>\';'),
-
-    ("let course = null;", "let book = null;"),
-
-    # ── row renderer ──
-    ("function lectureRow(v, n, restricted) {", "function pdfRow(v, n, restricted) {"),
-    ('<path d="M6.3 3.8A1 1 0 0 0 4.8 4.7v10.6a1 1 0 0 0 1.5.9l8.4-5.3a1 1 0 0 0 0-1.7L6.3 3.8Z"/>',
-     '<path fill-rule="evenodd" d="M4 3a2 2 0 0 1 2-2h5.6L16 5.4V17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V3Zm7 .5V6h2.5L11 3.5Z" clip-rule="evenodd"/>'),
-    ("'data-play=\"' + fmt.esc(v.video_url) + '\"", "'data-open=\"' + fmt.esc(v.pdf_url) + '\""),
-
-    # ── list builder ──
-    ("function lectureList() {", "function pdfList() {"),
-    ("const videos = (course.videos || []).slice()", "const files = (book.pdfs || []).slice()"),
-    ("if (!videos.length) {", "if (!files.length) {"),
-    ("Lectures are being added to this course.", "Chapters are being added to this book."),
-    ("const chapters = (course.chapters || []).slice()", "const chapters = (book.chapters || []).slice()"),
-    ("// same; videos with chapter === null fall into \"Other lectures\".",
-     "// same; PDFs with chapter === null fall into \"Other chapters\"."),
-    ("const mine = videos.filter(", "const mine = files.filter("),
-    ("mine.forEach((v) => { out += lectureRow(v, ++n, !hasAccess); });",
-     "mine.forEach((v) => { out += pdfRow(v, ++n, !hasAccess); });"),
-    ("const loose = videos.filter(", "const loose = files.filter("),
-    ("tracking-wider text-navy\">Other lectures</div>';", "tracking-wider text-navy\">Other chapters</div>';"),
-    ("loose.forEach((v) => { out += lectureRow(v, ++n, !hasAccess); });",
-     "loose.forEach((v) => { out += pdfRow(v, ++n, !hasAccess); });"),
-    ("return videos.map((v) => lectureRow(v, ++n, !hasAccess)).join('');",
-     "return files.map((v) => pdfRow(v, ++n, !hasAccess)).join('');"),
-
-    # ── reviews ──
-    ("What did you think of this course?", "What did you think of this book?"),
-    ("No reviews yet. Be the first once you enrol.", "No reviews yet. Be the first once you buy it."),
-
-    # ── render ──
-    ("const videos = course.videos || [];", "const files = book.pdfs || [];"),
-    ("const price = Number(course.price) || 0;", "const price = Number(book.price) || 0;"),
-    ("textContent = course.title + ' — InfuMedz';", "textContent = book.title + ' — InfuMedz';"),
-    ("String(course.description || '').slice(0, 155)", "String(book.description || '').slice(0, 155)"),
-    ("You own this course</div>'", "You own this book</div>'"),
-    ('\'<a href="courses.html" class="hover:text-primary">Courses</a>',
-     '\'<a href="books.html" class="hover:text-primary">Books</a>'),
-    ("fmt.esc(course.title) + '</span>' +", "fmt.esc(book.title) + '</span>' +"),
-    ("(course.category_name ? '<span class=\"badge-cat\">' + fmt.esc(course.category_name)",
-     "(book.category_name ? '<span class=\"badge-cat\">' + fmt.esc(book.category_name)"),
-    ("videos.length + (videos.length === 1 ? ' lecture' : ' lectures')",
-     "files.length + (files.length === 1 ? ' PDF' : ' PDFs')"),
-    ("(course.buyers_count ? '<span class=\"text-xs text-ink-muted\">&middot; ' + course.buyers_count + ' enrolled</span>' : '')",
-     "(book.buyers_count ? '<span class=\"text-xs text-ink-muted\">&middot; ' + book.buyers_count + ' readers</span>' : '')"),
-    ("fmt.esc(course.title) + '</h1>'", "fmt.esc(book.title) + '</h1>'"),
-    ("fmt.esc(course.description) + '</p>'", "fmt.esc(book.description) + '</p>'"),
-    ("fmt.esc(course.thumbnail_url || '')", "fmt.esc(book.thumbnail_url || '')"),
-    ("&check;</span> Watch on web and mobile app</li>", "&check;</span> Read on web and mobile app</li>"),
-    ("'<h2 class=\"text-base\">Course content</h2>'", "'<h2 class=\"text-base\">What is inside</h2>'"),
-    ("videos.length + ' lectures' +", "files.length + ' PDFs' +"),
-    ("' &middot; first ' + FREE_PREVIEW + ' free to watch'", "' &middot; first ' + FREE_PREVIEW + ' free to read'"),
-    ("The first two items in flat order are a free preview for everyone; the",
-     "The first two PDFs in flat order are a free preview for everyone; the"),
-    ("// rest open only once check-access/ confirms the purchase.",
-     "// rest open only once check-access/ confirms the purchase."),
-    ("lectureList() +", "pdfList() +"),
-
-    # ── review submit ──
-    ("await api.addCourseReview({", "await api.addBookReview({"),
-    ("course_id: course.id,", "book_id: book.id,"),
-    ("reviewData = await api.courseReviews(id);", "reviewData = await api.bookReviews(id);"),
-
-    # ── checkout ──
-    ("order = await api.createCourseOrder(session.userId, course.id);",
-     "order = await api.createBookOrder(session.userId, book.id);"),
-    ("description: course.title,", "description: book.title,"),
-    ("image: course.thumbnail_url || undefined,", "image: book.thumbnail_url || undefined,"),
-    ("the course is now in your library.", "the book is now in your library."),
-
-    # ── load ──
-    ("const [c, rev] = await Promise.all([", "const [b, rev] = await Promise.all(["),
-    ("api.course(id),", "api.book(id),"),
-    ("api.courseReviews(id).catch(() => reviewData),", "api.bookReviews(id).catch(() => reviewData),"),
-    ("course = c;", "book = b;"),
-    ("api.checkAccess(session.userId, 'course', id)", "api.checkAccess(session.userId, 'book', id)"),
-    ("if (Number(course.price) === 0) hasAccess = true;", "if (Number(book.price) === 0) hasAccess = true;"),
-    ("emptyState('Course not available', e.message || 'This course could not be loaded.',",
-     "emptyState('Book not available', e.message || 'This book could not be loaded.',"),
-    ('\'<a href="courses.html" class="btn-primary btn-sm">Browse all courses</a>\')',
-     '\'<a href="books.html" class="btn-primary btn-sm">Browse all books</a>\')'),
-]
-
 missing = []
-for old, new in REPS:
+
+
+def sub(old, new, count=0):
+    """Replace, recording anything that did not match so a silent drift in
+    course.html surfaces as a warning instead of a broken book page."""
+    global s
     if old not in s:
-        missing.append(old[:76])
-    else:
-        s = s.replace(old, new)
+        missing.append(old.strip().splitlines()[0][:72])
+        return
+    s = s.replace(old, new) if count == 0 else s.replace(old, new, count)
 
-# The inline <video> player becomes an inline PDF reader. Done as a block
-# swap rather than a string edit because the whole handler body changes.
-OLD_PLAYER = """  // Play a lecture inline.
-  document.querySelectorAll('[data-play]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const url = btn.dataset.play;
-      const title = btn.dataset.vtitle;
-      const slot = $('[data-player-slot]');
-      slot.innerHTML =
-        '<div class="card overflow-hidden">' +
-          '<video class="aspect-video w-full bg-black" controls autoplay playsinline controlsList="nodownload" ' +
-                 'src="' + fmt.esc(url) + '"></video>' +
-          '<div class="px-4 py-3"><p class="text-sm font-semibold text-navy">' + fmt.esc(title) + '</p></div>' +
-        '</div>';
-      slot.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-  });"""
 
-NEW_PLAYER = """  // Open a PDF in an inline reader. The browser's own PDF viewer handles
-  // paging, zoom and search better than anything worth hand-rolling.
-  document.querySelectorAll('[data-open]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const url = btn.dataset.open;
-      const title = btn.dataset.vtitle;
-      const slot = $('[data-player-slot]');
-      slot.innerHTML =
-        '<div class="card overflow-hidden">' +
-          '<div class="flex items-center justify-between gap-3 border-b border-line px-4 py-3">' +
-            '<p class="truncate text-sm font-semibold text-navy">' + fmt.esc(title) + '</p>' +
-            '<a href="' + fmt.esc(url) + '" target="_blank" rel="noopener" class="btn-ghost btn-sm shrink-0">Full screen</a>' +
-          '</div>' +
-          '<iframe class="h-[78vh] w-full bg-canvas" src="' + fmt.esc(url) + '#view=FitH" title="' + fmt.esc(title) + '"></iframe>' +
-        '</div>';
-      slot.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-  });"""
+# ════ head / meta ════
+sub("<title data-title>Course — InfuMedz</title>",
+    "<title data-title>Book — InfuMedz</title>")
+sub('content="Video lecture course on InfuMedz."',
+    'content="Reference notes and question banks on InfuMedz."')
+sub("boot('courses.html');", "boot('books.html');")
 
-if OLD_PLAYER in s:
-    s = s.replace(OLD_PLAYER, NEW_PLAYER, 1)
-else:
-    missing.append("<<player block>>")
+# ════ missing-id guard ════
+sub("emptyState('No course selected', 'That link is missing a course id.',",
+    "emptyState('No book selected', 'That link is missing a book id.',")
+sub('\'<a href="courses.html" class="btn-primary btn-sm">Browse courses</a>\')',
+    '\'<a href="books.html" class="btn-primary btn-sm">Browse books</a>\')')
 
-# Buy-button label resets reference the price; course -> book there too.
+# ════ state ════
+sub("let course = null;", "let book = null;")
+sub("let flat = [];                 // lectures in display order, with lock state",
+    "let flat = [];                 // PDFs in display order, with lock state")
+
+# ════ buildFlat ════
+sub("  const videos = (course.videos || []).slice().sort((a, b) => (a.order || 0) - (b.order || 0));",
+    "  const files = (book.pdfs || []).slice().sort((a, b) => (a.order || 0) - (b.order || 0));")
+sub("  const chapters = (course.chapters || []).slice().sort((a, b) => (a.order || 0) - (b.order || 0));",
+    "  const chapters = (book.chapters || []).slice().sort((a, b) => (a.order || 0) - (b.order || 0));")
+sub("      const mine = videos.filter((v) => String(v.chapter) === String(ch.id));",
+    "      const mine = files.filter((v) => String(v.chapter) === String(ch.id));")
+sub("    const loose = videos.filter((v) => !v.chapter);",
+    "    const loose = files.filter((v) => !v.chapter);")
+sub("    if (loose.length) out.push({ heading: chapters.length ? 'Other lectures' : null, items: loose });",
+    "    if (loose.length) out.push({ heading: chapters.length ? 'Other chapters' : null, items: loose });")
+sub("  } else if (videos.length) {\n    out.push({ heading: null, items: videos });",
+    "  } else if (files.length) {\n    out.push({ heading: null, items: files });")
+
+# ════ the viewer: <video> -> embedded PDF reader ════
+OLD_POSTER_BTN = """            ? '<button class="group flex flex-col items-center gap-3" data-play-index="' + firstPlayable.n + '">' +
+                '<span class="grid h-16 w-16 place-items-center rounded-full bg-white/95 shadow-lift transition-transform group-hover:scale-110">' +
+                  '<svg class="ml-1 h-7 w-7 text-primary" viewBox="0 0 20 20" fill="currentColor"><path d="M6.3 3.8A1 1 0 0 0 4.8 4.7v10.6a1 1 0 0 0 1.5.9l8.4-5.3a1 1 0 0 0 0-1.7L6.3 3.8Z"/></svg>' +
+                '</span>' +
+                '<span class="text-sm font-semibold text-white">Watch free preview</span>' +
+              '</button>'"""
+NEW_POSTER_BTN = """            ? '<button class="group flex flex-col items-center gap-3" data-play-index="' + firstPlayable.n + '">' +
+                '<span class="grid h-16 w-16 place-items-center rounded-full bg-white/95 shadow-lift transition-transform group-hover:scale-110">' +
+                  '<svg class="h-7 w-7 text-primary" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 3a2 2 0 0 1 2-2h5.6L16 5.4V17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V3Zm7 .5V6h2.5L11 3.5Z" clip-rule="evenodd"/></svg>' +
+                '</span>' +
+                '<span class="text-sm font-semibold text-white">Read free preview</span>' +
+              '</button>'"""
+sub(OLD_POSTER_BTN, NEW_POSTER_BTN)
+
+sub("'<p class=\"mt-3 text-sm font-semibold text-white\">Buy this course to start watching</p>' +",
+    "'<p class=\"mt-3 text-sm font-semibold text-white\">Buy this book to start reading</p>' +")
+
+OLD_VIDEO = """  return '' +
+    '<div class="overflow-hidden rounded-xl2 bg-black shadow-lift">' +
+      '<video class="aspect-video w-full" controls autoplay playsinline controlsList="nodownload noplaybackrate" ' +
+             'disablepictureinpicture oncontextmenu="return false" src="' + fmt.esc(cur.v.video_url) + '"></video>' +
+    '</div>' +
+    '<div class="mt-4 flex flex-wrap items-center justify-between gap-3">' +
+      '<div class="min-w-0">' +
+        '<p class="text-xs font-semibold uppercase tracking-wider text-primary">Lecture ' + (cur.n + 1) + ' of ' + flat.length + '</p>' +
+        '<h2 class="mt-0.5 truncate text-lg">' + fmt.esc(cur.v.title) + '</h2>' +
+      '</div>' +
+      '<div class="flex shrink-0 gap-2">' +
+        (activeIndex > 0 ? '<button class="btn-ghost btn-sm" data-step="-1">Previous</button>' : '') +
+        (flat[activeIndex + 1] && !flat[activeIndex + 1].locked
+          ? '<button class="btn-primary btn-sm" data-step="1">Next lecture</button>' : '') +
+      '</div>' +
+    '</div>';"""
+
+NEW_VIEWER = """  // Read-only reader. #toolbar=0&navpanes=0 hides the browser PDF viewer's
+  // own download and print buttons, and there is no download link anywhere
+  // on the page - you scroll and read, as asked.
+  //
+  // Being honest about what this is: it removes the download AFFORDANCE, it
+  // is not access control. The file URL is still reachable by anyone who
+  // opens DevTools. Signed, expiring media URLs are the actual fix and were
+  // deliberately deferred to a later pass.
+  return '' +
+    '<div class="overflow-hidden rounded-xl2 border border-line bg-white shadow-lift">' +
+      '<div class="flex items-center gap-3 border-b border-line bg-canvas px-4 py-2.5">' +
+        '<span class="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-chip text-primary">' +
+          '<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 3a2 2 0 0 1 2-2h5.6L16 5.4V17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V3Zm7 .5V6h2.5L11 3.5Z" clip-rule="evenodd"/></svg>' +
+        '</span>' +
+        '<p class="min-w-0 flex-1 truncate text-sm font-semibold text-navy">' + fmt.esc(cur.v.title) + '</p>' +
+        '<span class="shrink-0 text-xs text-ink-muted">' + (cur.n + 1) + ' / ' + flat.length + '</span>' +
+      '</div>' +
+      '<iframe class="h-[min(78vh,900px)] w-full bg-canvas" title="' + fmt.esc(cur.v.title) + '" ' +
+              'src="' + fmt.esc(cur.v.pdf_url) + '#toolbar=0&amp;navpanes=0&amp;scrollbar=1&amp;view=FitH"></iframe>' +
+    '</div>' +
+    '<div class="mt-4 flex flex-wrap items-center justify-between gap-3">' +
+      '<div class="min-w-0">' +
+        '<p class="text-xs font-semibold uppercase tracking-wider text-primary">Chapter ' + (cur.n + 1) + ' of ' + flat.length + '</p>' +
+        '<h2 class="mt-0.5 truncate text-lg">' + fmt.esc(cur.v.title) + '</h2>' +
+      '</div>' +
+      '<div class="flex shrink-0 gap-2">' +
+        (activeIndex > 0 ? '<button class="btn-ghost btn-sm" data-step="-1">Previous</button>' : '') +
+        (flat[activeIndex + 1] && !flat[activeIndex + 1].locked
+          ? '<button class="btn-primary btn-sm" data-step="1">Next chapter</button>' : '') +
+      '</div>' +
+    '</div>';"""
+sub(OLD_VIDEO, NEW_VIEWER)
+
+# ════ list ════
+sub("    return '<p class=\"px-5 py-10 text-center text-sm text-ink-muted\">Lectures are being added to this course.</p>';",
+    "    return '<p class=\"px-5 py-10 text-center text-sm text-ink-muted\">Chapters are being added to this book.</p>';")
+sub("                 '<span class=\"text-xs text-ink-muted\">' + count + ' lectures</span>' +",
+    "                 '<span class=\"text-xs text-ink-muted\">' + count + ' PDFs</span>' +")
+sub("    toast('Buy this course to unlock all lectures.', 'warn');",
+    "    toast('Buy this book to unlock all chapters.', 'warn');")
+# the "currently playing" equaliser icon becomes a "currently open" doc icon
+# The "currently playing" equaliser bars become a "currently open" document
+# icon. Matched on the path data alone, so the surrounding ternary's exact
+# indentation cannot break it.
+sub('<path d="M6 4h3v12H6zM11 4h3v12h-3z"/>',
+    '<path fill-rule="evenodd" d="M3 4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4Zm3 3h8v2H6V7Zm0 4h8v2H6v-2Z" clip-rule="evenodd"/>')
+sub("""                        : '<svg class="h-4 w-4 shrink-0 text-ink-muted" viewBox="0 0 20 20" fill="currentColor"><path d="M6.3 3.8A1 1 0 0 0 4.8 4.7v10.6a1 1 0 0 0 1.5.9l8.4-5.3a1 1 0 0 0 0-1.7L6.3 3.8Z"/></svg>')) +""",
+    """                        : '<svg class="h-4 w-4 shrink-0 text-ink-muted" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 3a2 2 0 0 1 2-2h5.6L16 5.4V17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V3Zm7 .5V6h2.5L11 3.5Z" clip-rule="evenodd"/></svg>')) +""")
+
+# ════ reviews ════
+sub("What did you think of this course?", "What did you think of this book?")
+sub("No reviews yet. Be the first once you enrol.", "No reviews yet. Be the first once you buy it.")
+
+# ════ hero band + rail ════
+sub("  const price = Number(course.price) || 0;", "  const price = Number(book.price) || 0;")
+sub("textContent = course.title + ' — InfuMedz';", "textContent = book.title + ' — InfuMedz';")
+sub("String(course.description || '').slice(0, 155)", "String(book.description || '').slice(0, 155)")
+sub('\'<a href="courses.html" class="hover:text-white">Courses</a>',
+    '\'<a href="books.html" class="hover:text-white">Books</a>')
+sub("fmt.esc(course.title) + '</span>' +", "fmt.esc(book.title) + '</span>' +")
+sub("(course.category_name ? '<span class=\"badge bg-white/15 text-white backdrop-blur\">' + fmt.esc(course.category_name)",
+    "(book.category_name ? '<span class=\"badge bg-white/15 text-white backdrop-blur\">' + fmt.esc(book.category_name)")
+sub("(hasAccess ? '<span class=\"badge bg-ok text-white\">Owned</span>' : '') +",
+    "(hasAccess ? '<span class=\"badge bg-ok text-white\">Owned</span>' : '') +")
+sub("fmt.esc(course.title) + '</h1>' +", "fmt.esc(book.title) + '</h1>' +")
+sub("fmt.esc(course.description) + '</p>' +", "fmt.esc(book.description) + '</p>' +")
+sub("            '<span>' + flat.length + ' lectures</span>' +", "            '<span>' + flat.length + ' PDFs</span>' +")
+sub("(course.buyers_count ? '<span>' + course.buyers_count + ' enrolled</span>' : '') +",
+    "(book.buyers_count ? '<span>' + book.buyers_count + ' readers</span>' : '') +")
+sub("fmt.esc(course.thumbnail_url || '')", "fmt.esc(book.thumbnail_url || '')")
+sub("'You own this course</p>'", "'You own this book</p>'")
+
+# ════ tabs / about pane ════
+sub("'<h3 class=\"text-base\">About this course</h3>' +", "'<h3 class=\"text-base\">About this book</h3>' +")
+# (the about-pane description is handled by the global
+#  course.description -> book.description replacement above)
+sub("""            ['<strong>' + flat.length + '</strong> video lectures, organised by chapter',
+             'Lifetime access on this website and the Android app',
+             'Watch on desktop, tablet or phone',
+             'New lectures added to this course at no extra cost']""",
+    """            ['<strong>' + flat.length + '</strong> PDF chapters, organised and searchable',
+             'Lifetime access on this website and the Android app',
+             'Read in the browser - no download needed',
+             'New chapters added to this book at no extra cost']""")
+sub("""              ['Lifetime access', 'Web and Android app', 'Chapter-wise structure', 'Secure UPI / card payment']""",
+    """              ['Lifetime access', 'Web and Android app', 'Read online, no download', 'Secure UPI / card payment']""")
+
+# ════ review submit ════
+sub("await api.addCourseReview({", "await api.addBookReview({")
+sub("          user: session.userId, course_id: course.id,", "          user: session.userId, book_id: book.id,")
+sub("        reviewData = await api.courseReviews(id);", "        reviewData = await api.bookReviews(id);")
+
+# ════ checkout ════
+sub("    order = await api.createCourseOrder(session.userId, course.id);",
+    "    order = await api.createBookOrder(session.userId, book.id);")
+sub("    description: course.title,", "    description: book.title,")
+sub("    image: course.thumbnail_url || undefined,", "    image: book.thumbnail_url || undefined,")
+sub("        toast('Payment confirmed — all lectures are unlocked.', 'success');",
+    "        toast('Payment confirmed — all chapters are unlocked.', 'success');")
+
+# ════ load ════
+sub("""  const [c, rev] = await Promise.all([
+    api.course(id),
+    api.courseReviews(id).catch(() => reviewData),
+  ]);
+  course = c;""",
+    """  const [b, rev] = await Promise.all([
+    api.book(id),
+    api.bookReviews(id).catch(() => reviewData),
+  ]);
+  book = b;""")
+sub("api.checkAccess(session.userId, 'course', id)", "api.checkAccess(session.userId, 'book', id)")
+sub("  if (Number(course.price) === 0) hasAccess = true;", "  if (Number(book.price) === 0) hasAccess = true;")
+sub("emptyState('Course not available', e.message || 'This course could not be loaded.',",
+    "emptyState('Book not available', e.message || 'This book could not be loaded.',")
+sub('\'<a href="courses.html" class="btn-primary btn-sm">Browse all courses</a>\')',
+    '\'<a href="books.html" class="btn-primary btn-sm">Browse all books</a>\')')
+
+# ════ anything still saying course.price in the buy-button reset ════
 s = s.replace("fmt.price(course.price)", "fmt.price(book.price)")
 
 open(dst, "w", encoding="utf-8", newline="\n").write(s)
 
 print("book.html written ->", dst)
 if missing:
-    print("NOT FOUND (" + str(len(missing)) + "):")
+    print("NOT FOUND (" + str(len(missing)) + ") - course.html may have changed:")
     for m in missing:
-        print("   ", m)
+        print("   " + m)
 else:
-    print("all " + str(len(REPS)) + " replacements applied, plus the player block")
+    print("all replacements applied")
 
-leftover = re.findall(r"\bcourse(?!s\.html)[A-Za-z_]*", s)
-print("leftover 'course*' identifiers:", sorted(set(leftover)) or "none")
+leftover = sorted(set(re.findall(r"\bcourse(?!s\.html|s\b)[A-Za-z_]*", s)))
+print("leftover 'course*' identifiers:", leftover or "none")

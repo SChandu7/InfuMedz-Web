@@ -147,10 +147,19 @@ export const api = {
     deleteCourseVideo: (id, h) => del('/api/infumedz/course/video/' + id + '/delete/', h),
     deleteBookPdf:     (id, h) => del('/api/infumedz/book/pdf/' + id + '/delete/', h),
 
-    courseChapters:   (cid, h) => get('/api/infumedz/course/' + cid + '/chapters/', h),
-    addCourseChapter: (d, h) => post('/api/infumedz/course/chapter/add/', d, h),
-    bookChapters:     (bid, h) => get('/api/infumedz/book/' + bid + '/chapters/', h),
-    addBookChapter:   (d, h) => post('/api/infumedz/book/chapter/add/', d, h),
+    courseChapters:      (cid, h) => get('/api/infumedz/course/' + cid + '/chapters/', h),
+    addCourseChapter:    (d, h) => post('/api/infumedz/course/chapter/add/', d, h),
+    deleteCourseChapter: (id, h) => del('/api/infumedz/course/chapter/' + id + '/delete/', h),
+    bookChapters:        (bid, h) => get('/api/infumedz/book/' + bid + '/chapters/', h),
+    addBookChapter:      (d, h) => post('/api/infumedz/book/chapter/add/', d, h),
+    deleteBookChapter:   (id, h) => del('/api/infumedz/book/chapter/' + id + '/delete/', h),
+
+    /* Whole-arrangement save (content_admin.py): every chapter and every
+       item, in display order. 409 = the content changed meanwhile. */
+    arrangeCourse: (d, h) => post('/api/infumedz/course/content/arrange/', d, h),
+    arrangeBook:   (d, h) => post('/api/infumedz/book/content/arrange/', d, h),
+    /* {kind: course_chapter|course_video|book_chapter|book_pdf, id, title} */
+    renameContent: (d, h) => post('/api/infumedz/content/rename/', d, h),
 
     replyCourseReview: (d, h) => post('/api/infumedz/admin/course-review/reply/', d, h),
     replyBookReview:   (d, h) => post('/api/infumedz/admin/book-review/reply/', d, h),

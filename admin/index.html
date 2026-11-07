@@ -19,12 +19,12 @@
     <div class="mb-6 text-center">
       <span class="mx-auto grid h-12 w-12 place-items-center rounded-xl2 bg-navy text-xl font-black text-white">A</span>
       <h1 class="mt-4 text-2xl">Admin sign in</h1>
-      <p class="prose-brand mt-1 text-sm">Use your InfuMedz account credentials.</p>
+      <p class="prose-brand mt-1 text-sm">Use your InfuMedz account email or phone, and its password.</p>
     </div>
     <form class="card p-6" data-gate-form novalidate>
       <div>
-        <label class="label" for="ad-email">Email</label>
-        <input id="ad-email" class="field" type="email" autocomplete="username" required placeholder="you@example.com">
+        <label class="label" for="ad-email">Email or phone</label>
+        <input id="ad-email" class="field" type="text" autocomplete="username" required placeholder="you@example.com or 10-digit phone">
       </div>
       <div class="mt-4">
         <label class="label" for="ad-pw">Password</label>
@@ -72,6 +72,7 @@
 import { api } from '../assets/js/api.js';
 import { session } from '../assets/js/session.js';
 import { fmt, toast, stars } from '../assets/js/ui.js';
+import { openContentManager, canLeaveContent } from '../assets/js/admin-content.js';
 
 const $  = (s, r) => (r || document).querySelector(s);
 const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
@@ -139,6 +140,9 @@ function paintTabs() {
 }
 
 async function open(tab) {
+  // Leaving the content manager with an unsaved arrangement or a running
+  // upload asks first (canLeaveContent is a no-op everywhere else).
+  if (!canLeaveContent()) return;
   current = tab;
   history.replaceState(null, '', '#' + tab);
   paintTabs();
@@ -391,15 +395,17 @@ const VIEWS = {
     $('[data-panel]').innerHTML =
       '<div class="mb-4 flex justify-end"><button class="btn-primary btn-sm" data-new-course>+ New course</button></div>' +
       '<div class="card overflow-hidden">' +
-        table(['Title', 'Category', 'Price', 'Lectures', 'Buyers', ''],
+        table(['Title', 'Category', 'Price', 'Lectures', 'Buyers', 'Content', ''],
           rows.map((c) =>
             '<tr>' +
               '<td class="px-4 py-3"><a href="../course.html?id=' + encodeURIComponent(c.id) + '" target="_blank" rel="noopener" ' +
                  'class="font-medium text-navy hover:text-primary">' + fmt.esc(c.title) + '</a></td>' +
               '<td class="px-4 py-3 text-ink-soft">' + fmt.esc(c.category_name || '—') + '</td>' +
               '<td class="px-4 py-3 font-semibold text-navy">' + fmt.price(c.price) + '</td>' +
-              '<td class="px-4 py-3 text-ink-soft">' + ((c.videos || []).length) + '</td>' +
+              '<td class="px-4 py-3 text-ink-soft">' + ((c.videos || []).length) +
+                ((c.chapters || []).length ? ' <span class="text-xs text-ink-muted">· ' + c.chapters.length + ' ch.</span>' : '') + '</td>' +
               '<td class="px-4 py-3 text-ink-soft">' + (c.buyers_count || 0) + '</td>' +
+              '<td class="px-4 py-3"><button class="btn-ghost btn-sm whitespace-nowrap" data-content-course="' + fmt.esc(c.id) + '">Manage videos</button></td>' +
               '<td class="px-4 py-3 text-right">' +
                 '<button class="text-sm font-medium text-bad hover:underline" data-del-course="' + fmt.esc(c.id) +
                 '" data-title="' + fmt.esc(c.title) + '">Delete</button></td>' +
@@ -421,6 +427,13 @@ const VIEWS = {
     }));
 
     $('[data-new-course]').addEventListener('click', () => contentForm('course'));
+
+    $$('[data-content-course]').forEach((b) => b.addEventListener('click', () => {
+      const row = rows.find((r) => String(r.id) === b.dataset.contentCourse);
+      $('[data-panel-title]').textContent = 'Courses · Content';
+      openContentManager({ kind: 'course', item: row, panel: $('[data-panel]'), H, onBack: () => open('courses') })
+        .catch((e) => toast(e.message || 'Could not load the course content.', 'error'));
+    }));
   },
 
   async books() {
@@ -428,15 +441,17 @@ const VIEWS = {
     $('[data-panel]').innerHTML =
       '<div class="mb-4 flex justify-end"><button class="btn-primary btn-sm" data-new-book>+ New book</button></div>' +
       '<div class="card overflow-hidden">' +
-        table(['Title', 'Category', 'Price', 'PDFs', 'Buyers', ''],
+        table(['Title', 'Category', 'Price', 'PDFs', 'Buyers', 'Content', ''],
           rows.map((b) =>
             '<tr>' +
               '<td class="px-4 py-3"><a href="../book.html?id=' + encodeURIComponent(b.id) + '" target="_blank" rel="noopener" ' +
                  'class="font-medium text-navy hover:text-primary">' + fmt.esc(b.title) + '</a></td>' +
               '<td class="px-4 py-3 text-ink-soft">' + fmt.esc(b.category_name || '—') + '</td>' +
               '<td class="px-4 py-3 font-semibold text-navy">' + fmt.price(b.price) + '</td>' +
-              '<td class="px-4 py-3 text-ink-soft">' + ((b.pdfs || []).length) + '</td>' +
+              '<td class="px-4 py-3 text-ink-soft">' + ((b.pdfs || []).length) +
+                ((b.chapters || []).length ? ' <span class="text-xs text-ink-muted">· ' + b.chapters.length + ' ch.</span>' : '') + '</td>' +
               '<td class="px-4 py-3 text-ink-soft">' + (b.buyers_count || 0) + '</td>' +
+              '<td class="px-4 py-3"><button class="btn-ghost btn-sm whitespace-nowrap" data-content-book="' + fmt.esc(b.id) + '">Manage PDFs</button></td>' +
               '<td class="px-4 py-3 text-right">' +
                 '<button class="text-sm font-medium text-bad hover:underline" data-del-book="' + fmt.esc(b.id) +
                 '" data-title="' + fmt.esc(b.title) + '">Delete</button></td>' +
@@ -456,6 +471,13 @@ const VIEWS = {
     }));
 
     $('[data-new-book]').addEventListener('click', () => contentForm('book'));
+
+    $$('[data-content-book]').forEach((btn) => btn.addEventListener('click', () => {
+      const row = rows.find((r) => String(r.id) === btn.dataset.contentBook);
+      $('[data-panel-title]').textContent = 'Books · Content';
+      openContentManager({ kind: 'book', item: row, panel: $('[data-panel]'), H, onBack: () => open('books') })
+        .catch((e) => toast(e.message || 'Could not load the book content.', 'error'));
+    }));
   },
 
   async reviews() {

@@ -184,15 +184,15 @@ sub("'<h3 class=\"text-base\">About this course</h3>' +", "'<h3 class=\"text-bas
 # (the about-pane description is handled by the global
 #  course.description -> book.description replacement above)
 sub("""            ['<strong>' + flat.length + '</strong> video lectures, organised by chapter',
-             'Lifetime access on this website and the Android app',
+             '12 months access on this website and in the app',
              'Watch on desktop, tablet or phone',
              'New lectures added to this course at no extra cost']""",
     """            ['<strong>' + flat.length + '</strong> PDF chapters, organised and searchable',
-             'Lifetime access on this website and the Android app',
+             '12 months access on this website and in the app',
              'Read in the browser - no download needed',
              'New chapters added to this book at no extra cost']""")
-sub("""              ['Lifetime access', 'Web and Android app', 'Chapter-wise structure', 'Secure UPI / card payment']""",
-    """              ['Lifetime access', 'Web and Android app', 'Read online, no download', 'Secure UPI / card payment']""")
+sub("""              ['12 months access', 'Web and mobile app', 'Chapter-wise structure', 'Secure UPI / card payment']""",
+    """              ['12 months access', 'Web and mobile app', 'Read online, no download', 'Secure UPI / card payment']""")
 
 # ════ review submit ════
 sub("await api.addCourseReview({", "await api.addBookReview({")

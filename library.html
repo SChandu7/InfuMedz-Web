@@ -136,7 +136,7 @@ async function load() {
   $('[data-courses]').innerHTML = courses.length
     ? courses.map((c) => ownedCard(c, 'course')).join('')
     : emptyState('No courses yet',
-        'Courses you buy will appear here and stay available for life.',
+        'Courses you buy will appear here, each with 12 months of access.',
         '<a href="courses.html" class="btn-primary btn-sm">Browse courses</a>');
 
   $('[data-books]').innerHTML = books.length

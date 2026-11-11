@@ -123,6 +123,8 @@ const NAV = [
   { href: 'index.html',    label: 'Home' },
   { href: 'courses.html',  label: 'Courses' },
   { href: 'books.html',    label: 'Books' },
+  { href: 'mcq.html',      label: 'Daily MCQ' },
+  { href: 'calculators.html', label: 'Calculators' },
   { href: 'services.html', label: 'Services' },
   { href: 'about.html',    label: 'About' },
   { href: 'library.html',  label: 'My Library', auth: true },
@@ -162,24 +164,24 @@ export function renderHeader(active) {
         '</div>' +
       '</div>'
     : '<div class="flex items-center gap-2">' +
-        '<a href="' + rel('login.html') + '" class="btn-ghost btn-sm">Sign in</a>' +
-        '<a href="' + rel('login.html') + '#signup" class="btn-primary btn-sm">Get started</a>' +
+        '<a href="' + rel('login.html') + '" class="btn-ghost btn-sm whitespace-nowrap">Sign in</a>' +
+        '<a href="' + rel('login.html') + '#signup" class="btn-primary btn-sm hidden whitespace-nowrap sm:inline-flex">Get started</a>' +
       '</div>';
 
   const html =
     '<header class="sticky top-0 z-50 border-b border-line bg-white/90 backdrop-blur-md">' +
       '<div class="shell flex h-16 items-center justify-between gap-6">' +
         brandLockup('index.html') +
-        '<nav class="hidden items-center gap-7 md:flex" aria-label="Main">' + links + '</nav>' +
+        '<nav class="hidden items-center gap-6 lg:flex" aria-label="Main">' + links + '</nav>' +
         '<div class="flex items-center gap-3">' +
           account +
-          '<button class="md:hidden grid h-9 w-9 place-items-center rounded-xl2 border border-line" data-burger aria-label="Open menu">' +
+          '<button class="lg:hidden grid h-9 w-9 place-items-center rounded-xl2 border border-line" data-burger aria-label="Open menu">' +
             '<svg class="h-5 w-5 text-navy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
               '<path d="M4 6h16M4 12h16M4 18h16" stroke-linecap="round"/></svg>' +
           '</button>' +
         '</div>' +
       '</div>' +
-      '<div class="hidden border-t border-line bg-white md:hidden" data-mobile-nav>' +
+      '<div class="hidden border-t border-line bg-white lg:hidden" data-mobile-nav>' +
         '<nav class="shell flex flex-col py-2" aria-label="Mobile">' +
           NAV.filter((n) => !n.auth || session.isLoggedIn)
              .map((n) => '<a href="' + rel(n.href) + '" class="py-2.5 text-sm font-medium text-ink-soft hover:text-primary">' + n.label + '</a>')
@@ -226,7 +228,7 @@ function wireHeader() {
   if (burger && mobile) {
     burger.addEventListener('click', () => {
       mobile.classList.toggle('hidden');
-      mobile.classList.toggle('md:hidden');
+      mobile.classList.toggle('lg:hidden');
     });
   }
 }

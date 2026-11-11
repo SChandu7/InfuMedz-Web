@@ -73,6 +73,7 @@ import { api } from '../assets/js/api.js';
 import { session } from '../assets/js/session.js';
 import { fmt, toast, stars } from '../assets/js/ui.js';
 import { openContentManager, canLeaveContent } from '../assets/js/admin-content.js';
+import { renderMcqAdmin, canLeaveMcq } from '../assets/js/admin-mcq.js';
 
 const $  = (s, r) => (r || document).querySelector(s);
 const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
@@ -83,6 +84,7 @@ const TABS = [
   { id: 'home',      label: 'Home & Banner' },
   { id: 'courses',   label: 'Courses' },
   { id: 'books',     label: 'Books' },
+  { id: 'mcq',       label: 'Daily MCQs' },
   { id: 'reviews',   label: 'Reviews' },
   { id: 'tickets',   label: 'Support' },
   { id: 'users',     label: 'Users' },
@@ -142,7 +144,7 @@ function paintTabs() {
 async function open(tab) {
   // Leaving the content manager with an unsaved arrangement or a running
   // upload asks first (canLeaveContent is a no-op everywhere else).
-  if (!canLeaveContent()) return;
+  if (!canLeaveContent() || !canLeaveMcq()) return;
   current = tab;
   history.replaceState(null, '', '#' + tab);
   paintTabs();
@@ -478,6 +480,10 @@ const VIEWS = {
       openContentManager({ kind: 'book', item: row, panel: $('[data-panel]'), H, onBack: () => open('books') })
         .catch((e) => toast(e.message || 'Could not load the book content.', 'error'));
     }));
+  },
+
+  async mcq() {
+    await renderMcqAdmin($('[data-panel]'), H);
   },
 
   async reviews() {

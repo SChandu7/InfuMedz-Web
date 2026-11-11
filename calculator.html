@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Medical Calculator — InfuMedz</title>
+<meta name="description" content="Cardiology calculator with guideline tables and references, from InfuMedz.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/app.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230E5FD8'/%3E%3Ctext x='16' y='22' font-family='system-ui' font-size='18' font-weight='900' fill='white' text-anchor='middle'%3EI%3C/text%3E%3C/svg%3E">
+</head>
+<body class="bg-canvas">
+
+<div data-header></div>
+
+<section class="bg-navy">
+  <div class="shell py-8 lg:py-10">
+    <nav class="mb-3 flex items-center gap-2 text-xs text-white/60" aria-label="Breadcrumb">
+      <a href="index.html" class="hover:text-white">Home</a><span aria-hidden="true">/</span>
+      <a href="calculators.html" class="hover:text-white">Medical Calculators</a><span aria-hidden="true">/</span>
+      <span class="font-medium text-white/90" data-crumb>Calculator</span>
+    </nav>
+    <span class="badge bg-white/15 text-white" data-category></span>
+    <h1 class="mt-3 text-2xl font-black text-white sm:text-3xl" data-title>Calculator</h1>
+    <p class="mt-2 max-w-3xl text-white/80" data-summary></p>
+  </div>
+</section>
+
+<main class="shell py-8" data-calc></main>
+
+<div data-footer></div>
+
+<script type="module">
+import { boot } from './assets/js/ui.js';
+import { byId } from './assets/js/calc/definitions.js';
+import { renderCalculator } from './assets/js/calc/render.js';
+
+boot('calculators.html');
+const id = new URLSearchParams(location.search).get('c');
+const def = byId(id);
+const host = document.querySelector('[data-calc]');
+
+if (!def) {
+  host.innerHTML = '<div class="card p-8 text-center"><p class="font-bold text-navy">Calculator not found</p>' +
+    '<a class="mt-3 inline-block font-semibold text-primary hover:underline" href="calculators.html">See all calculators</a></div>';
+} else {
+  document.title = def.name + ' — InfuMedz Medical Calculators';
+  document.querySelector('meta[name=description]').setAttribute('content', def.summary);
+  document.querySelector('[data-crumb]').textContent = def.name;
+  document.querySelector('[data-category]').textContent = def.category;
+  document.querySelector('[data-title]').textContent = def.name;
+  document.querySelector('[data-summary]').textContent = def.summary;
+  renderCalculator(def, host);
+}
+</script>
+</body>
+</html>

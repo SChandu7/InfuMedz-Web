@@ -122,6 +122,13 @@ export const api = {
   markNotification:   (d) => post('/api/infumedz/notifications/read/', d),
   clearNotifications: (uid) => post('/api/infumedz/notifications/clear/' + uid + '/', {}),
 
+  /* Daily MCQ (backend daily_mcq.py) - the correct answer is only sent
+     after this user has answered, or once the question has closed. */
+  mcqToday:   (uid) => get('/api/infumedz/mcq/today/' + (uid ? uid + '/' : '')),
+  mcqAnswer:  (d) => post('/api/infumedz/mcq/answer/', d),
+  mcqHistory: (uid) => get('/api/infumedz/mcq/history/' + uid + '/'),
+  mcqNotify:  (d) => post('/api/infumedz/mcq/notify/', d),
+
   /* Support */
   faqs:         () => get('/api/infumedz/faq/list/'),
   chatHistory:  (uid) => get('/api/infumedz/chat/history/' + uid + '/'),
@@ -169,6 +176,11 @@ export const api = {
     notifySend:     (d, h) => post('/api/infumedz/admin/notify/send/', d, h),
     notifyAnnounce: (d, h) => post('/api/infumedz/admin/notify/announce/', d, h),
     assignContent:  (d, h) => post('/api/infumedz/admin/assign-content/', d, h),
+
+    mcqList:     (h) => get('/api/infumedz/admin/mcq/', h),
+    mcqSave:     (d, h) => post('/api/infumedz/admin/mcq/save/', d, h),
+    mcqHide:     (id, h) => post('/api/infumedz/admin/mcq/' + id + '/delete/', {}, h),
+    mcqAnnounce: (id, h) => post('/api/infumedz/admin/mcq/' + id + '/notify/', {}, h),
 
     addFaq:    (d, h) => post('/api/infumedz/faq/add/', d, h),
     deleteFaq: (id, h) => del('/api/infumedz/faq/delete/' + id + '/', h),

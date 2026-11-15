@@ -123,11 +123,14 @@ const NAV = [
   { href: 'index.html',    label: 'Home' },
   { href: 'courses.html',  label: 'Courses' },
   { href: 'books.html',    label: 'Books' },
+  { href: 'quizzes.html',  label: 'MCQ Quizzes' },
   { href: 'mcq.html',      label: 'Daily MCQ' },
   { href: 'calculators.html', label: 'Calculators' },
-  { href: 'services.html', label: 'Services' },
-  { href: 'about.html',    label: 'About' },
-  { href: 'library.html',  label: 'My Library', auth: true },
+  // wide: only on screens 1280px+; below that they are in the footer, the
+  // account menu (My Library) and the phone menu, so the bar never wraps.
+  { href: 'services.html', label: 'Services', wide: true },
+  { href: 'about.html',    label: 'About', wide: true },
+  { href: 'library.html',  label: 'My Library', auth: true, wide: true },
 ];
 
 export function renderHeader(active) {
@@ -137,7 +140,7 @@ export function renderHeader(active) {
   const links = NAV
     .filter((n) => !n.auth || session.isLoggedIn)
     .map((n) => {
-      const cls = n.href === here ? 'nav-link nav-link-active' : 'nav-link';
+      const cls = (n.href === here ? 'nav-link nav-link-active' : 'nav-link') + ' whitespace-nowrap' + (n.wide ? ' hidden xl:inline' : '');
       return '<a href="' + rel(n.href) + '" class="' + cls + '">' + n.label + '</a>';
     })
     .join('');
@@ -172,7 +175,7 @@ export function renderHeader(active) {
     '<header class="sticky top-0 z-50 border-b border-line bg-white/90 backdrop-blur-md">' +
       '<div class="shell flex h-16 items-center justify-between gap-6">' +
         brandLockup('index.html') +
-        '<nav class="hidden items-center gap-6 lg:flex" aria-label="Main">' + links + '</nav>' +
+        '<nav class="hidden items-center gap-5 lg:flex xl:gap-6" aria-label="Main">' + links + '</nav>' +
         '<div class="flex items-center gap-3">' +
           account +
           '<button class="lg:hidden grid h-9 w-9 place-items-center rounded-xl2 border border-line" data-burger aria-label="Open menu">' +

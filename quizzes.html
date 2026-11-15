@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MCQ Quizzes — InfuMedz</title>
+<meta name="description" content="Exam-style MCQ quiz courses for MBBS, MD/MS and DM/DrNB: practise, get your score with explanations, a section-wise analysis and an AI review.">
+<link rel="canonical" href="https://infusionmedz.com/quizzes.html">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/app.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230E5FD8'/%3E%3Ctext x='16' y='22' font-family='system-ui' font-size='18' font-weight='900' fill='white' text-anchor='middle'%3EI%3C/text%3E%3C/svg%3E">
+</head>
+<body>
+
+<div data-header></div>
+
+<section class="border-b border-line bg-white">
+  <div class="shell py-10">
+    <nav class="mb-3 flex items-center gap-2 text-xs text-ink-muted" aria-label="Breadcrumb">
+      <a href="index.html" class="hover:text-primary">Home</a>
+      <span aria-hidden="true">/</span>
+      <span class="font-medium text-navy">MCQ Quizzes</span>
+    </nav>
+    <h1 class="text-3xl sm:text-4xl">MCQ Quizzes</h1>
+    <p class="prose-brand mt-2 max-w-2xl">
+      Exam-style question banks for MBBS, MD/MS and DM/DrNB. Answer at your own pace, then get your score,
+      every answer with its explanation, a section-wise analysis and an AI review of what to revise.
+      12 months of access with unlimited attempts, on the web and in the app.
+    </p>
+    <div class="mt-5 grid max-w-3xl gap-3 text-sm sm:grid-cols-3">
+      <div class="rounded-xl border border-line bg-canvas px-4 py-3"><span class="block font-bold text-navy">1. Buy once</span><span class="text-ink-muted">12 months, unlimited attempts</span></div>
+      <div class="rounded-xl border border-line bg-canvas px-4 py-3"><span class="block font-bold text-navy">2. Answer</span><span class="text-ink-muted">Saved as you go, resume any time</span></div>
+      <div class="rounded-xl border border-line bg-canvas px-4 py-3"><span class="block font-bold text-navy">3. Review</span><span class="text-ink-muted">Score, explanations, AI review, e-mail</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="shell">
+    <div class="mb-5 flex flex-wrap items-center gap-3">
+      <div class="flex flex-wrap gap-2" data-cats role="group" aria-label="Filter by level">
+        <div class="sk h-9 w-20"></div><div class="sk h-9 w-20"></div><div class="sk h-9 w-20"></div>
+      </div>
+      <div class="relative min-w-[220px] flex-1">
+        <svg class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+          <path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 1 0 3.4 9.8l3.4 3.4 1.4-1.4-3.4-3.4A5.5 5.5 0 0 0 9 3.5Zm-3.5 5.5a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0Z" clip-rule="evenodd"/>
+        </svg>
+        <input type="search" class="field pl-10" placeholder="Search quizzes…" data-search aria-label="Search quizzes">
+      </div>
+      <select class="field w-auto py-2" data-sort aria-label="Sort">
+        <option value="popular">Most enrolled</option>
+        <option value="questions">Most questions</option>
+        <option value="price-asc">Price: low to high</option>
+        <option value="price-desc">Price: high to low</option>
+      </select>
+    </div>
+    <p class="mb-4 text-sm text-ink-muted" data-count aria-live="polite"></p>
+    <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" data-grid></div>
+  </div>
+</section>
+
+<div data-footer></div>
+
+<script type="module">
+import { api } from './assets/js/api.js';
+import { session } from './assets/js/session.js';
+import { boot, skeletonGrid, emptyState, fmt, toast } from './assets/js/ui.js';
+import { quizCard } from './assets/js/quiz-ui.js';
+
+boot('quizzes.html');
+const $ = (s) => document.querySelector(s);
+$('[data-grid]').innerHTML = skeletonGrid(4);
+
+let all = [];
+const owned = new Set();
+const state = { category: new URLSearchParams(location.search).get('category') || 'all', q: '', sort: 'popular' };
+
+function apply() {
+  const q = state.q.trim().toLowerCase();
+  const rows = all.filter((x) => (state.category === 'all' || x.category_name === state.category) &&
+    (!q || ((x.title || '') + ' ' + (x.subtitle || '') + ' ' + (x.description || '')).toLowerCase().includes(q)));
+  const sorters = {
+    popular: (a, b) => (b.buyers_count || 0) - (a.buyers_count || 0),
+    questions: (a, b) => (b.question_count || 0) - (a.question_count || 0),
+    'price-asc': (a, b) => Number(a.price) - Number(b.price),
+    'price-desc': (a, b) => Number(b.price) - Number(a.price),
+  };
+  rows.sort(sorters[state.sort]);
+  $('[data-count]').textContent = rows.length + (rows.length === 1 ? ' quiz' : ' quizzes') + (state.category !== 'all' ? ' for ' + state.category : '');
+  $('[data-grid]').innerHTML = rows.length
+    ? rows.map((x) => quizCard(x, { owned: owned.has(String(x.id)) })).join('')
+    : emptyState(all.length ? 'No quizzes match' : 'Quizzes are on the way',
+        all.length ? 'Try another level or a broader search.' : 'New MCQ quiz courses are being prepared. Meanwhile, try the free Daily MCQ.',
+        all.length ? '' : '<a href="mcq.html" class="btn-primary btn-sm">Daily MCQ</a>');
+  document.querySelectorAll('[data-cats] [data-c]').forEach((b) => {
+    const on = b.dataset.c === state.category;
+    b.className = 'rounded-full border px-4 py-1.5 text-sm font-semibold transition-colors ' +
+      (on ? 'border-primary bg-primary text-white' : 'border-line bg-white text-navy hover:border-primary hover:text-primary');
+  });
+}
+
+let t;
+$('[data-search]').addEventListener('input', (e) => { clearTimeout(t); t = setTimeout(() => { state.q = e.target.value; apply(); }, 160); });
+$('[data-sort]').addEventListener('change', (e) => { state.sort = e.target.value; apply(); });
+$('[data-cats]').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-c]');
+  if (!b) return;
+  state.category = b.dataset.c;
+  history.replaceState(null, '', state.category === 'all' ? 'quizzes.html' : 'quizzes.html?category=' + encodeURIComponent(state.category));
+  apply();
+});
+
+async function load() {
+  const [quizzes, cats] = await Promise.all([api.quizzes(), api.categories().catch(() => [])]);
+  all = quizzes || [];
+  const counts = {};
+  all.forEach((x) => { counts[x.category_name] = (counts[x.category_name] || 0) + 1; });
+  const chip = (v, label, n) => '<button data-c="' + fmt.esc(v) + '">' + fmt.esc(label) + (n != null ? ' <span class="opacity-70">' + n + '</span>' : '') + '</button>';
+  $('[data-cats]').innerHTML = chip('all', 'All levels', all.length) +
+    (cats || []).filter((c) => c.is_active !== false).map((c) => chip(c.name, c.name, counts[c.name] || 0)).join('');
+  if (session.isLoggedIn) {
+    try {
+      const lib = await api.library(session.userId);
+      (lib.quizzes || []).forEach((x) => { if (x.has_access) owned.add(String(x.quiz_id)); });
+    } catch (_) { /* never blank the catalogue over the library */ }
+  }
+  apply();
+}
+
+load().catch((e) => {
+  $('[data-grid]').innerHTML = emptyState('Could not load quizzes', e.message || 'Something went wrong reaching the server.',
+    '<button class="btn-primary btn-sm" onclick="location.reload()">Try again</button>');
+  toast(e.message || 'Could not load quizzes.', 'error');
+});
+</script>
+</body>
+</html>

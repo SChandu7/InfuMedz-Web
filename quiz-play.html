@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quiz in progress — InfuMedz</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/app.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230E5FD8'/%3E%3Ctext x='16' y='22' font-family='system-ui' font-size='18' font-weight='900' fill='white' text-anchor='middle'%3EI%3C/text%3E%3C/svg%3E">
+</head>
+<body class="bg-canvas">
+
+<!-- Focused exam view: a slim bar instead of the full site header. -->
+<header class="sticky top-0 z-30 border-b border-line bg-white">
+  <div class="shell flex h-14 items-center gap-3">
+    <a href="#" data-exit class="btn-ghost btn-sm" aria-label="Save and exit">&larr; <span class="hidden sm:inline">Save &amp; exit</span></a>
+    <div class="min-w-0 flex-1">
+      <p class="line-1 text-sm font-bold text-navy" data-title>Loading…</p>
+      <p class="text-xs text-ink-muted" data-status></p>
+    </div>
+    <button class="btn-ghost btn-sm lg:hidden" data-palette-open>Questions</button>
+    <button class="btn-primary btn-sm" data-submit-open>Submit</button>
+  </div>
+  <div class="h-1 bg-line"><div class="h-1 bg-primary transition-all" style="width:0%" data-progress></div></div>
+</header>
+
+<main class="shell grid gap-6 py-6 lg:grid-cols-[1fr_300px]" data-main>
+  <section class="min-w-0" data-question><div class="card space-y-3 p-6"><div class="sk h-4 w-40"></div><div class="sk h-6 w-full"></div><div class="sk h-12 w-full"></div><div class="sk h-12 w-full"></div></div></section>
+  <aside class="hidden lg:block" data-palette-side></aside>
+</main>
+
+<!-- mobile palette -->
+<div class="fixed inset-0 z-40 hidden bg-black/40" data-drawer>
+  <div class="absolute inset-x-0 bottom-0 max-h-[80vh] overflow-auto rounded-t-2xl bg-white p-5" data-drawer-body></div>
+</div>
+
+<!-- submit dialog -->
+<div class="fixed inset-0 z-50 hidden place-items-center bg-black/40 p-4" data-confirm>
+  <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-lift" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+    <h2 id="confirm-title" class="text-xl">Submit test?</h2>
+    <dl class="mt-4 space-y-1.5 text-sm" data-confirm-stats></dl>
+    <p class="mt-4 text-sm text-ink-muted" data-confirm-note></p>
+    <div class="mt-6 flex justify-end gap-2">
+      <button class="btn-ghost" data-confirm-no>Keep answering</button>
+      <button class="btn-primary" data-confirm-yes>Submit</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { api } from './assets/js/api.js';
+import { session } from './assets/js/session.js';
+import { fmt, toast } from './assets/js/ui.js';
+
+const $ = (s) => document.querySelector(s);
+const attemptId = new URLSearchParams(location.search).get('attempt') || '';
+if (!session.requireLogin('quiz-play.html?attempt=' + attemptId)) throw new Error('not signed in');
+
+let S = null;             // session payload from the server
+let qs = [];              // questions
+let answers = {};         // qid -> {selected:[], text:'', flagged:false}
+let index = 0;
+let elapsed = 0;
+const dirty = new Set();
+let saveTimer = null;
+let saving = false;
+let saveFailed = false;
+let submitting = false;
+
+setInterval(() => { if (!document.hidden) elapsed++; }, 1000);
+
+const ans = (id) => (answers[id] = answers[id] || { selected: [], text: '', flagged: false });
+const isAnswered = (a) => a && ((a.selected && a.selected.length) || (a.text || '').trim());
+const answeredCount = () => qs.filter((q) => isAnswered(answers[q.id])).length;
+const flaggedCount = () => qs.filter((q) => answers[q.id] && answers[q.id].flagged).length;
+
+/* ── saving ───────────────────────────────────────────── */
+
+function changed(id) {
+  dirty.add(id);
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(save, 1500);
+  paintChrome();
+}
+
+async function save(force) {
+  clearTimeout(saveTimer);
+  if ((!dirty.size && !force) || saving || submitting) return;
+  const batch = {};
+  dirty.forEach((id) => { batch[id] = answers[id]; });
+  dirty.clear();
+  saving = true; paintStatus();
+  try {
+    await api.quizSave(attemptId, { user_id: session.userId, answers: batch, current_index: index, time_spent: elapsed });
+    saveFailed = false;
+  } catch (e) {
+    Object.keys(batch).forEach((k) => dirty.add(k));
+    saveFailed = true;
+    if (e.payload && e.payload.submitted) location.replace('quiz-result.html?attempt=' + encodeURIComponent(attemptId));
+    saveTimer = setTimeout(save, 8000);
+  } finally {
+    saving = false; paintStatus();
+  }
+}
+
+document.addEventListener('visibilitychange', () => { if (document.hidden) save(true); });
+window.addEventListener('beforeunload', (e) => {
+  if (dirty.size && !submitting) { save(true); e.preventDefault(); e.returnValue = ''; }
+});
+
+/* ── rendering ────────────────────────────────────────── */
+
+function paintStatus() {
+  $('[data-status]').textContent = saveFailed ? 'Not saved — retrying…'
+    : saving ? 'Saving…'
+    : 'Question ' + (index + 1) + ' of ' + qs.length + ' · ' + answeredCount() + ' answered' + (dirty.size ? '' : ' · saved');
+  $('[data-status]').className = 'text-xs ' + (saveFailed ? 'font-semibold text-bad' : 'text-ink-muted');
+}
+
+function paintChrome() {
+  paintStatus();
+  $('[data-progress]').style.width = (qs.length ? 100 * answeredCount() / qs.length : 0) + '%';
+  $('[data-palette-side]').innerHTML = '<div class="card sticky top-20 p-5">' + palette() + '</div>';
+}
+
+function palette() {
+  const groups = [];
+  qs.forEach((q, i) => {
+    const t = q.section_title || 'General';
+    let g = groups.find((x) => x.t === t);
+    if (!g) groups.push(g = { t, items: [] });
+    g.items.push(i);
+  });
+  const cell = (i) => {
+    const a = answers[qs[i].id];
+    const cls = a && a.flagged ? 'bg-warn text-ink border-warn'
+      : isAnswered(a) ? 'bg-primary text-white border-primary'
+      : 'bg-white text-navy border-line hover:border-primary';
+    return '<button data-go="' + i + '" class="h-9 rounded-lg border text-sm font-bold ' + cls + (i === index ? ' ring-2 ring-navy ring-offset-1' : '') + '" aria-label="Question ' + (i + 1) + '">' + (i + 1) + '</button>';
+  };
+  return '<div class="flex items-center justify-between"><p class="font-bold text-navy">Questions</p><p class="text-xs text-ink-muted">' + answeredCount() + '/' + qs.length + ' answered</p></div>' +
+    '<div class="mt-3 flex flex-wrap gap-3 text-xs text-ink-muted">' +
+      '<span class="flex items-center gap-1.5"><span class="h-3 w-3 rounded bg-primary"></span>Answered</span>' +
+      '<span class="flex items-center gap-1.5"><span class="h-3 w-3 rounded bg-warn"></span>Flagged</span>' +
+      '<span class="flex items-center gap-1.5"><span class="h-3 w-3 rounded border border-line bg-white"></span>Not answered</span>' +
+    '</div>' +
+    groups.map((g) => (groups.length > 1 ? '<p class="mb-2 mt-4 text-xs font-bold uppercase tracking-wider text-ink-muted">' + fmt.esc(g.t) + '</p>' : '<div class="mt-4"></div>') +
+      '<div class="grid grid-cols-6 gap-1.5">' + g.items.map(cell).join('') + '</div>').join('') +
+    '<button class="btn-primary mt-5 w-full" data-submit-open>Submit test</button>';
+}
+
+function renderQuestion() {
+  const q = qs[index];
+  if (!q) return;
+  const a = ans(q.id);
+  const multi = q.question_type === 'multiple';
+  const typeLabel = multi ? 'Choose all that apply' : q.question_type === 'text' ? 'Type the answer' : 'Choose one';
+  const opts = q.question_type === 'text'
+    ? '<input class="field" data-text maxlength="500" placeholder="Type your answer" value="' + fmt.esc(a.text) + '" aria-label="Your answer">'
+    : '<div class="space-y-2.5" role="' + (multi ? 'group' : 'radiogroup') + '">' + q.options.map((o, i) => {
+        const on = a.selected.includes(o.id);
+        return '<button data-opt="' + fmt.esc(o.id) + '" role="' + (multi ? 'checkbox' : 'radio') + '" aria-checked="' + on + '" class="flex w-full items-start gap-3 rounded-xl border p-3.5 text-left transition-colors ' +
+          (on ? 'border-primary bg-chip' : 'border-line bg-white hover:border-primary/50') + '">' +
+          '<span class="grid h-7 w-7 shrink-0 place-items-center ' + (multi ? 'rounded-md' : 'rounded-full') + ' border-2 text-xs font-bold ' + (on ? 'border-primary bg-primary text-white' : 'border-line text-ink-muted') + '">' +
+            (on ? '✓' : String.fromCharCode(65 + i)) + '</span>' +
+          '<span class="pt-0.5 text-[15px] ' + (on ? 'font-semibold text-navy' : 'text-ink') + '">' + fmt.esc(o.text) + '</span></button>';
+      }).join('') + '</div>';
+  $('[data-question]').innerHTML =
+    '<div class="card p-5 sm:p-7">' +
+      '<div class="flex items-center justify-between gap-3 text-xs font-semibold text-ink-muted">' +
+        '<span class="line-1">Q' + (index + 1) + ' · ' + fmt.esc(q.section_title || 'General') + (q.topic ? ' · ' + fmt.esc(q.topic) : '') + '</span>' +
+        '<span>' + (q.marks === 1 ? '1 mark' : q.marks + ' marks') + '</span></div>' +
+      '<h1 class="mt-3 text-lg font-bold leading-relaxed text-navy sm:text-xl">' + fmt.esc(q.question) + '</h1>' +
+      (q.image_url ? '<a href="' + fmt.esc(q.image_url) + '" target="_blank" rel="noopener" title="Open full size"><img src="' + fmt.esc(q.image_url) + '" alt="" class="mt-4 max-h-[420px] rounded-xl border border-line object-contain"></a>' : '') +
+      '<p class="mt-5 text-sm font-semibold text-primary">' + typeLabel + '</p>' +
+      '<div class="mt-3">' + opts + '</div>' +
+      '<div class="mt-4 flex flex-wrap items-center gap-2">' +
+        '<button class="btn-ghost btn-sm" data-flag>' + (a.flagged ? '⚑ Flagged — remove flag' : '⚐ Flag for review') + '</button>' +
+        (isAnswered(a) ? '<button class="btn-ghost btn-sm" data-clear>Clear answer</button>' : '') +
+      '</div>' +
+    '</div>' +
+    '<div class="mt-4 flex gap-3">' +
+      '<button class="btn-ghost flex-1 bg-white" data-prev ' + (index === 0 ? 'disabled' : '') + '>&larr; Previous</button>' +
+      (index === qs.length - 1
+        ? '<button class="btn-primary flex-1" data-submit-open>Submit test</button>'
+        : '<button class="btn-primary flex-1" data-next>' + (isAnswered(a) ? 'Next' : 'Skip') + ' &rarr;</button>') +
+    '</div>' +
+    '<p class="mt-3 hidden text-center text-xs text-ink-muted sm:block">Keys: A–H choose · ← → move · F flag</p>';
+  paintChrome();
+}
+
+function go(i) {
+  if (i < 0 || i >= qs.length) return;
+  index = i;
+  renderQuestion();
+  save(true);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+/* ── events ───────────────────────────────────────────── */
+
+document.addEventListener('click', (e) => {
+  const t = e.target.closest('button,a');
+  if (!t || !qs.length) return;
+  const q = qs[index];
+  if (t.matches('[data-opt]')) {
+    const a = ans(q.id), id = t.dataset.opt;
+    if (q.question_type === 'multiple') a.selected = a.selected.includes(id) ? a.selected.filter((x) => x !== id) : a.selected.concat(id);
+    else a.selected = [id];
+    changed(q.id); renderQuestion();
+  } else if (t.matches('[data-flag]')) { ans(q.id).flagged = !ans(q.id).flagged; changed(q.id); renderQuestion(); }
+  else if (t.matches('[data-clear]')) { const a = ans(q.id); a.selected = []; a.text = ''; changed(q.id); renderQuestion(); }
+  else if (t.matches('[data-next]')) go(index + 1);
+  else if (t.matches('[data-prev]')) go(index - 1);
+  else if (t.matches('[data-go]')) { closeDrawer(); go(Number(t.dataset.go)); }
+  else if (t.matches('[data-submit-open]')) { closeDrawer(); openConfirm(); }
+  else if (t.matches('[data-palette-open]')) { $('[data-drawer-body]').innerHTML = palette(); $('[data-drawer]').classList.remove('hidden'); }
+  else if (t.matches('[data-exit]')) { e.preventDefault(); exit(); }
+  else if (t.matches('[data-confirm-no]')) $('[data-confirm]').classList.replace('grid', 'hidden');
+  else if (t.matches('[data-confirm-yes]')) submit();
+});
+
+document.addEventListener('input', (e) => {
+  if (e.target.matches('[data-text]')) {
+    const q = qs[index];
+    const a = ans(q.id), was = !!isAnswered(a);
+    a.text = e.target.value;
+    changed(q.id);
+    if (was !== !!isAnswered(a)) { const pos = e.target.selectionStart; renderQuestion(); const el = $('[data-text]'); el.focus(); el.setSelectionRange(pos, pos); }
+  }
+});
+
+$('[data-drawer]').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeDrawer(); });
+function closeDrawer() { $('[data-drawer]').classList.add('hidden'); }
+
+document.addEventListener('keydown', (e) => {
+  if (!qs.length || e.target.matches('input,textarea') || !$('[data-confirm]').classList.contains('hidden')) return;
+  const q = qs[index];
+  if (e.key === 'ArrowRight') go(index + 1);
+  else if (e.key === 'ArrowLeft') go(index - 1);
+  else if (e.key.toLowerCase() === 'f') { ans(q.id).flagged = !ans(q.id).flagged; changed(q.id); renderQuestion(); }
+  else if (q.question_type !== 'text' && /^[a-h]$/i.test(e.key)) {
+    const o = q.options[e.key.toUpperCase().charCodeAt(0) - 65];
+    if (!o) return;
+    const a = ans(q.id);
+    if (q.question_type === 'multiple') a.selected = a.selected.includes(o.id) ? a.selected.filter((x) => x !== o.id) : a.selected.concat(o.id);
+    else a.selected = [o.id];
+    changed(q.id); renderQuestion();
+  }
+});
+
+async function exit() {
+  await save(true);
+  location.href = 'quiz.html?id=' + encodeURIComponent(S.quiz.id);
+}
+
+function openConfirm() {
+  const n = qs.length, done = answeredCount();
+  $('[data-confirm-stats]').innerHTML =
+    '<div class="flex justify-between"><dt>Answered</dt><dd class="font-bold text-navy">' + done + ' of ' + n + '</dd></div>' +
+    '<div class="flex justify-between"><dt>Not answered</dt><dd class="font-bold text-navy">' + (n - done) + '</dd></div>' +
+    '<div class="flex justify-between"><dt>Flagged for review</dt><dd class="font-bold text-navy">' + flaggedCount() + '</dd></div>';
+  const neg = Number(S.quiz.negative_mark) || 0;
+  $('[data-confirm-note]').textContent = neg > 0
+    ? 'Unanswered questions score zero. Wrong answers lose ' + neg + ' of the question\'s marks. You can\'t change answers after submitting.'
+    : 'Unanswered questions score zero. You can\'t change answers after submitting.';
+  $('[data-confirm]').classList.replace('hidden', 'grid');
+}
+
+async function submit() {
+  if (submitting) return;
+  submitting = true;
+  clearTimeout(saveTimer);
+  const yes = $('[data-confirm-yes]');
+  yes.disabled = true; yes.textContent = 'Submitting…';
+  try {
+    // Everything is sent again: the server merges, so a lost autosave can't lose an answer.
+    await api.quizSubmit(attemptId, { user_id: session.userId, answers, current_index: index, time_spent: elapsed });
+    location.replace('quiz-result.html?attempt=' + encodeURIComponent(attemptId));
+  } catch (e) {
+    submitting = false; yes.disabled = false; yes.textContent = 'Submit';
+    toast(e.message || 'Could not submit. Your answers are saved; please try again.', 'error');
+  }
+}
+
+/* ── load ─────────────────────────────────────────────── */
+
+async function load() {
+  S = await api.quizAttempt(attemptId, session.userId);
+  if (S.attempt && S.attempt.status === 'submitted') { location.replace('quiz-result.html?attempt=' + encodeURIComponent(attemptId)); return; }
+  qs = S.questions || [];
+  answers = S.answers || {};
+  index = Math.min(Math.max(0, S.current_index || 0), Math.max(0, qs.length - 1));
+  elapsed = (S.attempt && S.attempt.time_spent_seconds) || 0;
+  document.title = S.quiz.title + ' — Quiz in progress';
+  $('[data-title]').textContent = S.quiz.title;
+  if (!qs.length) { $('[data-question]').innerHTML = '<div class="card p-8 text-center text-ink-muted">This quiz has no questions yet.</div>'; return; }
+  renderQuestion();
+}
+
+load().catch((e) => {
+  $('[data-question]').innerHTML = '<div class="card p-8 text-center"><p class="font-semibold text-navy">Could not open this attempt</p><p class="mt-1 text-sm text-ink-muted">' +
+    fmt.esc(e.message || '') + '</p><a href="quizzes.html" class="btn-primary btn-sm mt-4">Back to quizzes</a></div>';
+});
+</script>
+</body>
+</html>

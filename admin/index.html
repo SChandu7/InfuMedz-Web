@@ -74,6 +74,7 @@ import { session } from '../assets/js/session.js';
 import { fmt, toast, stars } from '../assets/js/ui.js';
 import { openContentManager, canLeaveContent } from '../assets/js/admin-content.js';
 import { renderMcqAdmin, canLeaveMcq } from '../assets/js/admin-mcq.js';
+import { renderQuizAdmin, canLeaveQuiz } from '../assets/js/admin-quiz.js';
 
 const $  = (s, r) => (r || document).querySelector(s);
 const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
@@ -84,6 +85,7 @@ const TABS = [
   { id: 'home',      label: 'Home & Banner' },
   { id: 'courses',   label: 'Courses' },
   { id: 'books',     label: 'Books' },
+  { id: 'quizzes',   label: 'MCQ Quizzes' },
   { id: 'mcq',       label: 'Daily MCQs' },
   { id: 'reviews',   label: 'Reviews' },
   { id: 'tickets',   label: 'Support' },
@@ -144,7 +146,7 @@ function paintTabs() {
 async function open(tab) {
   // Leaving the content manager with an unsaved arrangement or a running
   // upload asks first (canLeaveContent is a no-op everywhere else).
-  if (!canLeaveContent() || !canLeaveMcq()) return;
+  if (!canLeaveContent() || !canLeaveMcq() || !canLeaveQuiz()) return;
   current = tab;
   history.replaceState(null, '', '#' + tab);
   paintTabs();
@@ -484,6 +486,10 @@ const VIEWS = {
 
   async mcq() {
     await renderMcqAdmin($('[data-panel]'), H);
+  },
+
+  async quizzes() {
+    await renderQuizAdmin($('[data-panel]'), H);
   },
 
   async reviews() {

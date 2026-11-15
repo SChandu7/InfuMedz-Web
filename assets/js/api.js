@@ -129,6 +129,19 @@ export const api = {
   mcqHistory: (uid) => get('/api/infumedz/mcq/history/' + uid + '/'),
   mcqNotify:  (d) => post('/api/infumedz/mcq/notify/', d),
 
+  /* MCQ quiz courses (backend quiz_courses.py). Exam mode: answers and
+     explanations only come back with a submitted attempt. */
+  quizzes:      () => get('/api/infumedz/quizzes/'),
+  quiz:         (id, uid) => get('/api/infumedz/quizzes/' + id + '/' + (uid ? '?user_id=' + uid : '')),
+  quizStart:    (id, uid) => post('/api/infumedz/quizzes/' + id + '/start/', { user_id: uid }),
+  quizAttempts: (id, uid) => get('/api/infumedz/quizzes/' + id + '/attempts/?user_id=' + uid),
+  quizAttempt:  (aid, uid) => get('/api/infumedz/quizzes/attempt/' + aid + '/?user_id=' + uid),
+  quizSave:     (aid, d) => post('/api/infumedz/quizzes/attempt/' + aid + '/save/', d),
+  quizSubmit:   (aid, d) => post('/api/infumedz/quizzes/attempt/' + aid + '/submit/', d),
+  quizAiReview: (aid, uid) => post('/api/infumedz/quizzes/attempt/' + aid + '/ai-review/', { user_id: uid }),
+  quizEmail:    (aid, uid) => post('/api/infumedz/quizzes/attempt/' + aid + '/email/', { user_id: uid }),
+  createQuizOrder: (user, quizId) => post('/api/infumedz/payment/create-quiz-order/', { user, quiz_id: quizId }),
+
   /* Support */
   faqs:         () => get('/api/infumedz/faq/list/'),
   chatHistory:  (uid) => get('/api/infumedz/chat/history/' + uid + '/'),
@@ -181,6 +194,18 @@ export const api = {
     mcqSave:     (d, h) => post('/api/infumedz/admin/mcq/save/', d, h),
     mcqHide:     (id, h) => post('/api/infumedz/admin/mcq/' + id + '/delete/', {}, h),
     mcqAnnounce: (id, h) => post('/api/infumedz/admin/mcq/' + id + '/notify/', {}, h),
+
+    quizList:          (h) => get('/api/infumedz/admin/quizzes/', h),
+    quizDetail:        (id, h) => get('/api/infumedz/admin/quizzes/' + id + '/', h),
+    quizSave:          (d, h) => post('/api/infumedz/admin/quizzes/save/', d, h),
+    quizDelete:        (id, h) => post('/api/infumedz/admin/quizzes/' + id + '/delete/', {}, h),
+    quizSectionSave:   (id, d, h) => post('/api/infumedz/admin/quizzes/' + id + '/section/save/', d, h),
+    quizSectionDelete: (sid, h) => post('/api/infumedz/admin/quizzes/section/' + sid + '/delete/', {}, h),
+    quizQuestionSave:  (id, d, h) => post('/api/infumedz/admin/quizzes/' + id + '/question/save/', d, h),
+    quizQuestionDelete:(qid, h) => post('/api/infumedz/admin/quizzes/question/' + qid + '/delete/', {}, h),
+    quizArrange:       (id, d, h) => post('/api/infumedz/admin/quizzes/' + id + '/arrange/', d, h),
+    quizImport:        (id, d, h) => post('/api/infumedz/admin/quizzes/' + id + '/import/', d, h),
+    quizGrant:         (d, h) => post('/api/infumedz/admin/quizzes/grant/', d, h),
 
     addFaq:    (d, h) => post('/api/infumedz/faq/add/', d, h),
     deleteFaq: (id, h) => del('/api/infumedz/faq/delete/' + id + '/', h),

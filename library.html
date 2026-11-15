@@ -47,6 +47,14 @@
       <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" data-books></div>
     </div>
 
+    <div>
+      <div class="mb-6 flex items-end justify-between gap-4">
+        <h2 class="text-xl">MCQ Quizzes <span class="text-base font-medium text-ink-muted" data-count-quizzes></span></h2>
+        <a href="quizzes.html" class="btn-ghost btn-sm shrink-0">Find more</a>
+      </div>
+      <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" data-quizzes></div>
+    </div>
+
     <!-- Notifications: the app has a bell; on web this reads better as a panel -->
     <div data-notif-wrap class="hidden">
       <div class="mb-6 flex items-end justify-between gap-4">
@@ -65,6 +73,7 @@
 import { api } from './assets/js/api.js';
 import { session } from './assets/js/session.js';
 import { boot, skeletonGrid, emptyState, fmt, toast } from './assets/js/ui.js';
+import { accessLabel, cover, pct, plural } from './assets/js/quiz-ui.js';
 
 boot('library.html');
 const $ = (s) => document.querySelector(s);
@@ -76,6 +85,25 @@ if (!session.requireLogin('library.html')) {
 
 $('[data-courses]').innerHTML = skeletonGrid(4);
 $('[data-books]').innerHTML   = skeletonGrid(4);
+$('[data-quizzes]').innerHTML = skeletonGrid(4);
+
+function quizOwnedCard(q) {
+  const facts = [plural(q.question_count || 0, 'question')];
+  if (q.attempts) facts.push('best ' + pct(q.best_percent), plural(q.attempts, 'attempt'));
+  const label = accessLabel(q);
+  const verb = q.expired ? 'Renew' : (q.in_progress ? 'Resume' : (q.attempts ? 'Practise again' : 'Start quiz'));
+  return '' +
+    '<a href="quiz.html?id=' + encodeURIComponent(q.quiz_id) + '" class="card-hover group flex flex-col overflow-hidden">' +
+      '<div class="relative">' + cover(q.thumbnail, q.category_name) +
+        '<div class="absolute left-3 top-3"><span class="badge-own">' + (q.expired ? 'Expired' : 'Owned') + '</span></div></div>' +
+      '<div class="flex flex-1 flex-col p-4">' +
+        '<h3 class="line-2 text-[15px] font-bold leading-snug text-navy transition-colors group-hover:text-primary">' + fmt.esc(q.title) + '</h3>' +
+        '<p class="mt-1 text-xs text-ink-muted">' + facts.join(' · ') + '</p>' +
+        (label ? '<p class="mt-1 text-xs ' + (q.expired || q.can_renew ? 'font-semibold text-warn' : 'text-ink-muted') + '">' + fmt.esc(label) + '</p>' : '') +
+        '<span class="mt-3 text-sm font-semibold text-primary">' + verb + ' &rarr;</span>' +
+      '</div>' +
+    '</a>';
+}
 
 /* The library endpoint returns a trimmed shape - {course_id, title, thumbnail}
    - not the full catalogue record, so these cards are built here rather than
@@ -129,9 +157,17 @@ async function load() {
   const lib = await api.library(session.userId);
   const courses = lib.courses || [];
   const books   = lib.books   || [];
+  const quizzes = lib.quizzes || [];
 
   $('[data-count-courses]').textContent = courses.length ? '(' + courses.length + ')' : '';
   $('[data-count-books]').textContent   = books.length   ? '(' + books.length   + ')' : '';
+  $('[data-count-quizzes]').textContent = quizzes.length ? '(' + quizzes.length + ')' : '';
+
+  $('[data-quizzes]').innerHTML = quizzes.length
+    ? quizzes.map(quizOwnedCard).join('')
+    : emptyState('No quizzes yet',
+        'MCQ quiz courses you buy will appear here, with your scores and progress.',
+        '<a href="quizzes.html" class="btn-primary btn-sm">Browse quizzes</a>');
 
   $('[data-courses]').innerHTML = courses.length
     ? courses.map((c) => ownedCard(c, 'course')).join('')
@@ -173,6 +209,7 @@ load().catch((e) => {
     'Could not load your library', e.message || 'Something went wrong.',
     '<button class="btn-primary btn-sm" onclick="location.reload()">Try again</button>');
   $('[data-books]').innerHTML = '';
+  $('[data-quizzes]').innerHTML = '';
 });
 </script>
 </body>

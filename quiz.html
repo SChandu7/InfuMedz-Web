@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MCQ Quiz — InfuMedz</title>
+<meta name="description" content="Exam-style MCQ quiz course from InfuMedz with explanations, analysis and an AI review.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/app.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230E5FD8'/%3E%3Ctext x='16' y='22' font-family='system-ui' font-size='18' font-weight='900' fill='white' text-anchor='middle'%3EI%3C/text%3E%3C/svg%3E">
+<script src="https://checkout.razorpay.com/v1/checkout.js" defer></script>
+</head>
+<body class="bg-canvas">
+
+<div data-header></div>
+<main data-main>
+  <div class="shell py-10"><div class="grid gap-8 lg:grid-cols-[1fr_340px]"><div class="space-y-4"><div class="sk aspect-video"></div><div class="sk h-8 w-2/3"></div><div class="sk h-4 w-1/2"></div></div><div class="sk h-64"></div></div></div>
+</main>
+<div data-footer></div>
+
+<script type="module">
+import { api, ApiError } from './assets/js/api.js';
+import { session } from './assets/js/session.js';
+import { boot, emptyState, fmt, toast } from './assets/js/ui.js';
+import { accessLabel, cover, duration, num, pct, plural } from './assets/js/quiz-ui.js';
+
+boot('quizzes.html');
+const $ = (s) => document.querySelector(s);
+const id = new URLSearchParams(location.search).get('id') || '';
+let d = null;
+let busy = false;
+
+const check = (t) => '<li class="flex gap-2.5"><svg class="mt-0.5 h-5 w-5 shrink-0 text-ok" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M16.7 5.3a1 1 0 0 1 0 1.4l-8 8a1 1 0 0 1-1.4 0l-4-4 1.4-1.4L8 12.6l7.3-7.3a1 1 0 0 1 1.4 0Z" clip-rule="evenodd"/></svg><span>' + fmt.esc(t) + '</span></li>';
+const fact = (t) => '<span class="rounded-lg border border-line bg-white px-3 py-1.5 text-sm font-medium text-navy">' + t + '</span>';
+const block = (title, body, sub) => '<section class="card p-6"><h2 class="text-lg">' + title + '</h2>' + (sub ? '<p class="mt-1 text-sm text-ink-muted">' + sub + '</p>' : '') + '<div class="mt-4">' + body + '</div></section>';
+
+function sample(q, i) {
+  const icon = q.question_type === 'multiple' ? '<span class="h-4 w-4 rounded border-2 border-line"></span>' : '<span class="h-4 w-4 rounded-full border-2 border-line"></span>';
+  return '<div class="rounded-xl border border-line p-4">' +
+    '<p class="text-xs font-bold text-primary">Q' + (i + 1) + ' · ' + (q.question_type === 'multiple' ? 'Choose all that apply' : q.question_type === 'text' ? 'Typed answer' : 'Choose one') + '</p>' +
+    '<p class="mt-1.5 font-semibold text-navy">' + fmt.esc(q.question) + '</p>' +
+    (q.image_url ? '<img src="' + fmt.esc(q.image_url) + '" alt="" class="mt-3 max-h-72 rounded-lg border border-line">' : '') +
+    '<ul class="mt-3 space-y-2">' + (q.options || []).map((o) => '<li class="flex items-center gap-2.5 text-sm text-ink-soft">' + icon + fmt.esc(o.text) + '</li>').join('') + '</ul>' +
+  '</div>';
+}
+
+function sidebar() {
+  const a = d.access || {};
+  const p = d.progress || {};
+  const free = Number(d.price) === 0;
+  const priceLine = free ? 'Free' : fmt.price(d.price);
+  let actions = '';
+  if (!session.isLoggedIn) {
+    actions = '<a class="btn-primary w-full" href="login.html?next=' + encodeURIComponent('quiz.html?id=' + id) + '">Sign in to ' + (free ? 'start' : 'buy') + '</a>';
+  } else if (a.has_access) {
+    const ip = p.in_progress;
+    actions = '<button class="btn-primary w-full" data-start>' + (ip ? 'Resume (' + ip.answered + '/' + ip.total + ' answered)' : (p.attempts ? 'Start new attempt' : 'Start quiz')) + '</button>' +
+      (a.can_renew ? '<button class="btn-ghost mt-2 w-full" data-buy>Renew · ' + priceLine + '</button>' : '');
+  } else {
+    actions = '<button class="btn-primary w-full" data-buy>' + (a.owned ? 'Renew' : (free ? 'Get it free' : 'Buy')) + (free ? '' : ' · ' + priceLine) + '</button>';
+  }
+  const label = accessLabel(a);
+  const progress = (a.owned && (p.attempts || p.in_progress)) ?
+    '<div class="mt-5 border-t border-line pt-5">' +
+      '<p class="text-xs font-bold uppercase tracking-wider text-ink-muted">Your progress</p>' +
+      '<div class="mt-3 grid grid-cols-3 gap-2 text-center">' +
+        '<div class="rounded-lg bg-canvas p-2"><div class="text-lg font-black text-navy">' + (p.attempts || 0) + '</div><div class="text-[11px] text-ink-muted">Attempts</div></div>' +
+        '<div class="rounded-lg bg-canvas p-2"><div class="text-lg font-black text-navy">' + pct(p.best_percent) + '</div><div class="text-[11px] text-ink-muted">Best</div></div>' +
+        '<div class="rounded-lg bg-canvas p-2"><div class="text-lg font-black text-navy">' + pct(p.last && p.last.percent) + '</div><div class="text-[11px] text-ink-muted">Last</div></div>' +
+      '</div>' +
+      (p.last ? '<a class="mt-3 block text-sm font-semibold text-primary hover:underline" href="quiz-result.html?attempt=' + encodeURIComponent(p.last.id) + '">View last result →</a>' : '') +
+      (p.attempts > 1 ? '<button class="mt-1 block text-sm font-semibold text-primary hover:underline" data-history>All attempts</button>' : '') +
+      '<div data-history-list></div>' +
+    '</div>' : '';
+  return '<div class="card p-6 lg:sticky lg:top-24">' +
+    (a.has_access ? '' : '<div class="text-3xl font-black text-navy">' + priceLine + '</div>') +
+    '<p class="mt-1 text-sm ' + (a.expired || a.can_renew ? 'font-semibold text-warn' : 'text-ink-muted') + '">' +
+      fmt.esc(label || '12 months access · unlimited attempts · web and app') + '</p>' +
+    '<div class="mt-4">' + actions + '</div>' +
+    '<ul class="mt-5 space-y-2 text-sm text-ink-soft">' +
+      '<li>' + plural(d.question_count || 0, 'question') + (d.total_marks ? ' · ' + d.total_marks + ' marks' : '') + '</li>' +
+      '<li>Pass mark ' + d.pass_percent + '%</li>' +
+      '<li>' + (Number(d.negative_mark) > 0 ? '−' + num(d.negative_mark) + ' mark per wrong answer' : 'No negative marking') + '</li>' +
+      '<li>No time limit · progress saved</li>' +
+    '</ul>' + progress +
+  '</div>';
+}
+
+function render() {
+  document.title = d.title + ' — MCQ Quiz — InfuMedz';
+  const owned = d.access && d.access.has_access;
+  const inside = (d.sections || []).map((s) =>
+    '<li class="flex items-center justify-between gap-3 py-3"><span class="flex items-center gap-2.5 font-semibold text-navy">' +
+    '<svg class="h-5 w-5 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/></svg>' +
+    fmt.esc(s.title) + '</span><span class="text-sm text-ink-muted">' + plural(s.question_count, 'question') + '</span></li>').join('');
+  $('[data-main]').innerHTML =
+    '<div class="border-b border-line bg-white"><div class="shell py-6">' +
+      '<nav class="flex items-center gap-2 text-xs text-ink-muted" aria-label="Breadcrumb"><a href="index.html" class="hover:text-primary">Home</a><span>/</span><a href="quizzes.html" class="hover:text-primary">MCQ Quizzes</a><span>/</span><span class="font-medium text-navy line-1">' + fmt.esc(d.title) + '</span></nav>' +
+    '</div></div>' +
+    '<div class="shell grid gap-8 py-8 lg:grid-cols-[1fr_340px]">' +
+      '<div class="min-w-0 space-y-6">' +
+        '<div class="card overflow-hidden">' + cover(d.thumbnail_url, d.category_name, 'aspect-[21/9]') +
+          '<div class="p-6">' +
+            (d.category_name ? '<span class="badge-cat">' + fmt.esc(d.category_name) + '</span>' : '') +
+            '<h1 class="mt-2 text-2xl sm:text-3xl">' + fmt.esc(d.title) + '</h1>' +
+            (d.subtitle ? '<p class="prose-brand mt-2">' + fmt.esc(d.subtitle) + '</p>' : '') +
+            '<div class="mt-4 flex flex-wrap gap-2">' +
+              fact(plural(d.question_count || 0, 'question')) +
+              (d.section_count ? fact(plural(d.section_count, 'section')) : '') +
+              fact('Pass ' + d.pass_percent + '%') +
+              fact(Number(d.negative_mark) > 0 ? '−' + num(d.negative_mark) + ' per wrong' : 'No negative marking') +
+              (d.buyers_count ? fact(d.buyers_count + ' enrolled') : '') +
+            '</div>' +
+          '</div></div>' +
+        block('What you get', '<ul class="space-y-2.5 text-[15px] text-ink">' +
+          (d.highlights || []).map(check).join('') +
+          check('Detailed answer and explanation for every question') +
+          check('Section-wise and topic-wise score analysis') +
+          check('AI review of what you missed and what to revise') +
+          check('Your full result e-mailed to you') +
+          check('Unlimited attempts for 12 months; progress is saved') + '</ul>') +
+        (d.description ? block('About this quiz', '<p class="prose-brand whitespace-pre-line">' + fmt.esc(d.description) + '</p>') : '') +
+        (inside ? block("What's inside", '<ul class="divide-y divide-line">' + inside + '</ul>') : '') +
+        ((d.topics || []).length ? block('Topics covered', '<div class="flex flex-wrap gap-2">' + d.topics.map((t) => '<span class="rounded-md bg-chip px-2.5 py-1 text-sm text-navy">' + fmt.esc(t) + '</span>').join('') + '</div>') : '') +
+        (!owned && (d.sample_questions || []).length ? block('Sample questions', '<div class="space-y-3">' + d.sample_questions.map(sample).join('') + '</div>', 'Answers and explanations are shown after you finish the test.') : '') +
+        block('How it works', '<p class="prose-brand whitespace-pre-line">' + fmt.esc(d.instructions ||
+          'Answer the questions in any order. Your answers save automatically, so you can leave and come back. Flag questions to revisit them. When you submit, you get your score, every correct answer with its explanation, a section-wise analysis and an optional AI review.') + '</p>') +
+      '</div>' +
+      '<aside data-side>' + sidebar() + '</aside>' +
+    '</div>';
+  wire();
+}
+
+function wire() {
+  const start = $('[data-start]');
+  if (start) start.addEventListener('click', startQuiz);
+  const buy = $('[data-buy]');
+  if (buy) buy.addEventListener('click', checkout);
+  const hist = $('[data-history]');
+  if (hist) hist.addEventListener('click', showHistory);
+}
+
+async function showHistory() {
+  const box = $('[data-history-list]');
+  box.innerHTML = '<div class="sk mt-3 h-20"></div>';
+  try {
+    const r = await api.quizAttempts(id, session.userId);
+    const done = (r.items || []).filter((a) => a.status === 'submitted');
+    box.innerHTML = '<ul class="mt-3 divide-y divide-line text-sm">' + done.map((a, i) =>
+      '<li><a class="flex items-center justify-between py-2 hover:text-primary" href="quiz-result.html?attempt=' + encodeURIComponent(a.id) + '">' +
+      '<span>#' + (done.length - i) + ' · ' + fmt.date(a.submitted_at) + '</span><span class="font-bold ' + (a.passed ? 'text-ok' : 'text-bad') + '">' + pct(a.percent) + '</span></a></li>').join('') + '</ul>';
+  } catch (e) { box.innerHTML = '<p class="mt-2 text-sm text-bad">' + fmt.esc(e.message) + '</p>'; }
+}
+
+async function startQuiz() {
+  if (busy) return;
+  busy = true;
+  const b = $('[data-start]');
+  b.disabled = true; b.textContent = 'Starting…';
+  try {
+    const s = await api.quizStart(id, session.userId);
+    location.href = 'quiz-play.html?attempt=' + encodeURIComponent(s.attempt.id);
+  } catch (e) {
+    busy = false; b.disabled = false; render();
+    toast(e.message || 'Could not start the quiz.', 'error');
+  }
+}
+
+async function checkout() {
+  if (busy || !session.requireLogin()) return;
+  busy = true;
+  const b = $('[data-buy]');
+  b.disabled = true; b.textContent = 'Starting…';
+  const reset = () => { busy = false; render(); };
+  let order;
+  try {
+    order = await api.createQuizOrder(session.userId, id);
+  } catch (e) {
+    reset();
+    return toast((e instanceof ApiError && e.status >= 500) ? 'Payments are temporarily unavailable. Please try again shortly.' : (e.message || 'Could not start the payment.'), 'error');
+  }
+  if (order.free) { toast('Added to your library.', 'success'); return load(); }
+  if (!window.Razorpay) { reset(); return toast('Payment library failed to load. Check your connection and retry.', 'error'); }
+  const rzp = new window.Razorpay({
+    key: order.key, amount: order.amount, currency: 'INR', name: 'InfuMedz',
+    description: d.title, order_id: order.order_id, image: d.thumbnail_url || undefined,
+    prefill: { name: (session.user && session.user.name) || '', email: (session.user && session.user.email) || '' },
+    theme: { color: '#0E5FD8' },
+    handler: async (res) => {
+      try {
+        await api.verifyPayment({ order_id: res.razorpay_order_id, payment_id: res.razorpay_payment_id, signature: res.razorpay_signature });
+        toast('Payment confirmed. The quiz is unlocked for 12 months.', 'success');
+      } catch (e) {
+        toast('Payment taken but not yet confirmed. Contact support with order ' + res.razorpay_order_id + '.', 'error', 12000);
+      }
+      busy = false;
+      load();
+    },
+    modal: { ondismiss: reset },
+  });
+  rzp.on('payment.failed', (r) => { toast((r.error && r.error.description) || 'Payment failed.', 'error'); reset(); });
+  rzp.open();
+}
+
+async function load() {
+  d = await api.quiz(id, session.userId);
+  render();
+}
+
+load().catch((e) => {
+  $('[data-main]').innerHTML = '<div class="shell py-16">' + emptyState('Quiz not available', e.message || 'This quiz could not be loaded.',
+    '<a href="quizzes.html" class="btn-primary btn-sm">Browse quizzes</a>') + '</div>';
+});
+</script>
+</body>
+</html>

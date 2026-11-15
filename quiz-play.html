@@ -21,6 +21,7 @@
       <p class="line-1 text-sm font-bold text-navy" data-title>Loading…</p>
       <p class="text-xs text-ink-muted" data-status></p>
     </div>
+    <span class="hidden items-center gap-1 rounded-lg bg-chip px-2.5 py-1.5 text-sm font-bold tabular-nums text-navy" data-timer aria-live="off"></span>
     <button class="btn-ghost btn-sm lg:hidden" data-palette-open>Questions</button>
     <button class="btn-primary btn-sm" data-submit-open>Submit</button>
   </div>
@@ -54,6 +55,7 @@
 import { api } from './assets/js/api.js';
 import { session } from './assets/js/session.js';
 import { fmt, toast } from './assets/js/ui.js';
+import { clock } from './assets/js/quiz-ui.js';
 
 const $ = (s) => document.querySelector(s);
 const attemptId = new URLSearchParams(location.search).get('attempt') || '';
@@ -69,8 +71,24 @@ let saveTimer = null;
 let saving = false;
 let saveFailed = false;
 let submitting = false;
+let deadline = null;      // local Date of the server deadline, null = untimed
+let warned5 = false, warned1 = false;
 
-setInterval(() => { if (!document.hidden) elapsed++; }, 1000);
+setInterval(() => { if (!document.hidden) elapsed++; tickTimer(); }, 1000);
+
+function secondsLeft() { return deadline ? Math.max(0, Math.ceil((deadline - Date.now()) / 1000)) : null; }
+
+function tickTimer() {
+  const el = $('[data-timer]');
+  const left = secondsLeft();
+  if (left == null || !el) return;
+  el.classList.remove('hidden'); el.classList.add('inline-flex');
+  el.textContent = '⏱ ' + clock(left);
+  el.className = el.className.replace(/ ?(bg-chip|text-navy|bg-bad\/10|text-bad)/g, '') + (left <= 300 ? ' bg-bad/10 text-bad' : ' bg-chip text-navy');
+  if (left <= 300 && left > 60 && !warned5) { warned5 = true; toast('5 minutes left. Answers are submitted automatically at zero.', 'warn', 6000); }
+  if (left <= 60 && left > 0 && !warned1) { warned1 = true; toast('1 minute left.', 'warn', 6000); }
+  if (left === 0 && !submitting && qs.length) submit(true);
+}
 
 const ans = (id) => (answers[id] = answers[id] || { selected: [], text: '', flagged: false });
 const isAnswered = (a) => a && ((a.selected && a.selected.length) || (a.text || '').trim());
@@ -99,7 +117,7 @@ async function save(force) {
   } catch (e) {
     Object.keys(batch).forEach((k) => dirty.add(k));
     saveFailed = true;
-    if (e.payload && e.payload.submitted) location.replace('quiz-result.html?attempt=' + encodeURIComponent(attemptId));
+    if (e.payload && e.payload.submitted) { submitting = true; location.replace('quiz-result.html?attempt=' + encodeURIComponent(attemptId)); return; }
     saveTimer = setTimeout(save, 8000);
   } finally {
     saving = false; paintStatus();
@@ -267,23 +285,37 @@ function openConfirm() {
   $('[data-confirm-note]').textContent = neg > 0
     ? 'Unanswered questions score zero. Wrong answers lose ' + neg + ' of the question\'s marks. You can\'t change answers after submitting.'
     : 'Unanswered questions score zero. You can\'t change answers after submitting.';
+  if (deadline) $('[data-confirm-note]').textContent += ' Time left: ' + clock(secondsLeft()) + '.';
   $('[data-confirm]').classList.replace('hidden', 'grid');
 }
 
-async function submit() {
+async function submit(auto) {
   if (submitting) return;
   submitting = true;
   clearTimeout(saveTimer);
   const yes = $('[data-confirm-yes]');
   yes.disabled = true; yes.textContent = 'Submitting…';
-  try {
-    // Everything is sent again: the server merges, so a lost autosave can't lose an answer.
-    await api.quizSubmit(attemptId, { user_id: session.userId, answers, current_index: index, time_spent: elapsed });
-    location.replace('quiz-result.html?attempt=' + encodeURIComponent(attemptId));
-  } catch (e) {
-    submitting = false; yes.disabled = false; yes.textContent = 'Submit';
-    toast(e.message || 'Could not submit. Your answers are saved; please try again.', 'error');
+  if (auto) {
+    $('[data-confirm]').classList.replace('grid', 'hidden');
+    $('[data-question]').innerHTML = '<div class="card p-8 text-center"><p class="text-lg font-bold text-navy">Time is up</p><p class="mt-1 text-sm text-ink-muted">Submitting your answers…</p></div>';
   }
+  const body = { user_id: session.userId, answers, current_index: index, time_spent: elapsed };
+  if (auto) body.auto = true;
+  for (let i = 0; i < (auto ? 4 : 1); i++) {
+    try {
+      // Everything is sent again: the server merges, so a lost autosave can't lose an answer.
+      await api.quizSubmit(attemptId, body);
+      location.replace('quiz-result.html?attempt=' + encodeURIComponent(attemptId));
+      return;
+    } catch (e) {
+      if (auto) { await new Promise((r) => setTimeout(r, 3000)); continue; }
+      submitting = false; yes.disabled = false; yes.textContent = 'Submit';
+      toast(e.message || 'Could not submit. Your answers are saved; please try again.', 'error');
+      return;
+    }
+  }
+  // The server closes the attempt at the deadline by itself; show that result.
+  location.replace('quiz-result.html?attempt=' + encodeURIComponent(attemptId));
 }
 
 /* ── load ─────────────────────────────────────────────── */
@@ -295,6 +327,7 @@ async function load() {
   answers = S.answers || {};
   index = Math.min(Math.max(0, S.current_index || 0), Math.max(0, qs.length - 1));
   elapsed = (S.attempt && S.attempt.time_spent_seconds) || 0;
+  if (S.seconds_left != null) { deadline = new Date(Date.now() + S.seconds_left * 1000); tickTimer(); }
   document.title = S.quiz.title + ' — Quiz in progress';
   $('[data-title]').textContent = S.quiz.title;
   if (!qs.length) { $('[data-question]').innerHTML = '<div class="card p-8 text-center text-ink-muted">This quiz has no questions yet.</div>'; return; }

@@ -125,6 +125,7 @@ function render() {
         '<section class="card p-6">' +
           '<h1 class="text-xl sm:text-2xl">' + fmt.esc(q.title) + '</h1>' +
           '<p class="text-sm text-ink-muted">' + (R.attempt_number ? 'Attempt ' + R.attempt_number + ' · ' : '') + fmt.date(a.submitted_at) + (a.time_spent_seconds ? ' · ' + duration(a.time_spent_seconds) : '') + '</p>' +
+          (a.auto_submitted ? '<p class="mt-3 rounded-lg bg-warn/10 px-3 py-2 text-sm font-semibold text-ink">⏱ Time ran out, so your saved answers were submitted automatically.</p>' : '') +
           '<div class="mt-5 flex flex-wrap items-center gap-6">' +
             '<div class="relative">' + ring(a.percent, colour) +
               '<div class="absolute inset-0 grid place-items-center text-center"><div><div class="text-2xl font-black" style="color:' + colour + '">' + pct(a.percent) + '</div><div class="text-xs text-ink-muted">' + num(a.score) + ' / ' + num(a.max_score) + '</div></div></div></div>' +

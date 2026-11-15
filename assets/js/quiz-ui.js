@@ -9,6 +9,24 @@ export const num = (n) => (n == null ? '–' : (Number(n) % 1 === 0 ? String(Num
 
 export const plural = (n, one, many) => n + ' ' + (n === 1 ? one : (many || one + 's'));
 
+/** 180 -> "3 hours", 90 -> "1 h 30 min", 0 -> "No time limit". */
+export function timeLimit(min) {
+  min = Number(min) || 0;
+  if (min <= 0) return 'No time limit';
+  const h = Math.floor(min / 60), m = min % 60;
+  if (!h) return m + ' min';
+  if (!m) return h === 1 ? '1 hour' : h + ' hours';
+  return h + ' h ' + m + ' min';
+}
+
+/** Countdown text: "2:59:07" or "04:12". */
+export function clock(sec) {
+  sec = Math.max(0, Math.floor(sec));
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+  const two = (v) => String(v).padStart(2, '0');
+  return h ? h + ':' + two(m) + ':' + two(s) : two(m) + ':' + two(s);
+}
+
 export function duration(sec) {
   sec = Number(sec) || 0;
   if (sec <= 0) return '–';

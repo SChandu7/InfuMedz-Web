@@ -24,7 +24,7 @@
 import { api, ApiError } from './assets/js/api.js';
 import { session } from './assets/js/session.js';
 import { boot, emptyState, fmt, toast } from './assets/js/ui.js';
-import { accessLabel, cover, duration, num, pct, plural } from './assets/js/quiz-ui.js';
+import { accessLabel, clock, cover, num, pct, plural, timeLimit } from './assets/js/quiz-ui.js';
 
 boot('quizzes.html');
 const $ = (s) => document.querySelector(s);
@@ -56,7 +56,7 @@ function sidebar() {
     actions = '<a class="btn-primary w-full" href="login.html?next=' + encodeURIComponent('quiz.html?id=' + id) + '">Sign in to ' + (free ? 'start' : 'buy') + '</a>';
   } else if (a.has_access) {
     const ip = p.in_progress;
-    actions = '<button class="btn-primary w-full" data-start>' + (ip ? 'Resume (' + ip.answered + '/' + ip.total + ' answered)' : (p.attempts ? 'Start new attempt' : 'Start quiz')) + '</button>' +
+    actions = '<button class="btn-primary w-full" data-start>' + (ip ? 'Resume (' + ip.answered + '/' + ip.total + ' answered' + (ip.seconds_left != null ? ', ' + clock(ip.seconds_left) + ' left' : '') + ')' : (p.attempts ? 'Start new attempt' : 'Start quiz')) + '</button>' +
       (a.can_renew ? '<button class="btn-ghost mt-2 w-full" data-buy>Renew · ' + priceLine + '</button>' : '');
   } else {
     actions = '<button class="btn-primary w-full" data-buy>' + (a.owned ? 'Renew' : (free ? 'Get it free' : 'Buy')) + (free ? '' : ' · ' + priceLine) + '</button>';
@@ -83,7 +83,7 @@ function sidebar() {
       '<li>' + plural(d.question_count || 0, 'question') + (d.total_marks ? ' · ' + d.total_marks + ' marks' : '') + '</li>' +
       '<li>Pass mark ' + d.pass_percent + '%</li>' +
       '<li>' + (Number(d.negative_mark) > 0 ? '−' + num(d.negative_mark) + ' mark per wrong answer' : 'No negative marking') + '</li>' +
-      '<li>No time limit · progress saved</li>' +
+      '<li>' + (d.time_limit_minutes ? '<b class="text-navy">' + timeLimit(d.time_limit_minutes) + '</b> per attempt · submitted automatically at zero' : 'No time limit · progress saved') + '</li>' +
     '</ul>' + progress +
   '</div>';
 }
@@ -110,6 +110,7 @@ function render() {
               fact(plural(d.question_count || 0, 'question')) +
               (d.section_count ? fact(plural(d.section_count, 'section')) : '') +
               fact('Pass ' + d.pass_percent + '%') +
+              fact(d.time_limit_minutes ? '⏱ ' + timeLimit(d.time_limit_minutes) : 'No time limit') +
               fact(Number(d.negative_mark) > 0 ? '−' + num(d.negative_mark) + ' per wrong' : 'No negative marking') +
               (d.buyers_count ? fact(d.buyers_count + ' enrolled') : '') +
             '</div>' +
@@ -125,8 +126,11 @@ function render() {
         (inside ? block("What's inside", '<ul class="divide-y divide-line">' + inside + '</ul>') : '') +
         ((d.topics || []).length ? block('Topics covered', '<div class="flex flex-wrap gap-2">' + d.topics.map((t) => '<span class="rounded-md bg-chip px-2.5 py-1 text-sm text-navy">' + fmt.esc(t) + '</span>').join('') + '</div>') : '') +
         (!owned && (d.sample_questions || []).length ? block('Sample questions', '<div class="space-y-3">' + d.sample_questions.map(sample).join('') + '</div>', 'Answers and explanations are shown after you finish the test.') : '') +
-        block('How it works', '<p class="prose-brand whitespace-pre-line">' + fmt.esc(d.instructions ||
-          'Answer the questions in any order. Your answers save automatically, so you can leave and come back. Flag questions to revisit them. When you submit, you get your score, every correct answer with its explanation, a section-wise analysis and an optional AI review.') + '</p>') +
+        block('How it works', '<p class="prose-brand whitespace-pre-line">' + fmt.esc(
+          (d.time_limit_minutes ? 'You have ' + timeLimit(d.time_limit_minutes) + ' from the moment you start. The timer keeps running if you leave, and when it reaches zero your saved answers are submitted automatically.\n\n' : '') +
+          (d.instructions || (d.time_limit_minutes
+            ? 'Answer the questions in any order and flag any to revisit. Your answers save automatically. When you submit, you get your score, every correct answer with its explanation, a section-wise analysis and an optional AI review.'
+            : 'Answer the questions in any order. Your answers save automatically, so you can leave and come back. Flag questions to revisit them. When you submit, you get your score, every correct answer with its explanation, a section-wise analysis and an optional AI review.'))) + '</p>') +
       '</div>' +
       '<aside data-side>' + sidebar() + '</aside>' +
     '</div>';
@@ -156,6 +160,8 @@ async function showHistory() {
 
 async function startQuiz() {
   if (busy) return;
+  const fresh = !(d.progress && d.progress.in_progress);
+  if (fresh && d.time_limit_minutes && !confirm('This quiz has a ' + timeLimit(d.time_limit_minutes) + ' time limit. The timer starts now and keeps running if you leave. Start?')) return;
   busy = true;
   const b = $('[data-start]');
   b.disabled = true; b.textContent = 'Starting…';

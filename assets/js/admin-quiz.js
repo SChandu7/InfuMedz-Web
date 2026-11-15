@@ -77,7 +77,7 @@ export async function renderQuizAdmin(panel, H) {
       '<div class="min-w-0 flex-1">' +
         '<div class="flex items-center gap-2"><p class="line-1 font-bold text-navy">' + esc(q.title) + '</p>' +
           '<span class="badge ' + (q.is_published ? 'bg-ok/10 text-ok' : 'bg-warn/15 text-ink') + '">' + (q.is_published ? 'PUBLISHED' : 'DRAFT') + '</span></div>' +
-        '<p class="mt-0.5 text-sm text-ink-muted">' + esc(q.category_name) + ' · ' + (Number(q.price) === 0 ? 'Free' : fmt.price(q.price)) + ' · ' + q.question_count + ' questions · ' + q.section_count + ' sections</p>' +
+        '<p class="mt-0.5 text-sm text-ink-muted">' + esc(q.category_name) + ' · ' + (Number(q.price) === 0 ? 'Free' : fmt.price(q.price)) + ' · ' + q.question_count + ' questions · ' + q.section_count + ' sections' + (q.time_limit_minutes ? ' · ⏱ ' + q.time_limit_minutes + ' min' : '') + '</p>' +
         '<p class="text-xs text-ink-muted">' + q.buyers_count + ' buyers · ' + q.attempts + ' attempts' + (q.avg_percent != null ? ' · average ' + pct(q.avg_percent) : '') + '</p>' +
       '</div><span class="text-ink-muted">›</span></button>';
   }
@@ -142,15 +142,18 @@ async function openQuiz(panel, H, quizId, cats) {
       description: val('description').trim(), instructions: val('instructions').trim(),
       pass_percent: Number(val('pass_percent')), negative_mark: Number(val('negative_mark')),
       free_preview_count: Number(val('free_preview_count')),
+      time_limit_minutes: f.elements.timed.checked ? Number(val('time_limit_minutes')) : 0,
     } : {
       title: q.title, subtitle: q.subtitle, category_id: q.category_id, price: q.price, thumbnail_url: q.thumbnail_url,
       highlights: q.highlights, description: q.description, instructions: q.instructions,
       pass_percent: q.pass_percent, negative_mark: q.negative_mark, free_preview_count: q.free_preview_count,
+      time_limit_minutes: q.time_limit_minutes || 0,
     };
     Object.assign(body, overrides || {});
     if (quizId) body.id = quizId;
     if (!('is_published' in body)) body.is_published = !!q.is_published;
     if (!body.title) return toast('Give the quiz a title.', 'warn');
+    if (f && f.elements.timed.checked && !(body.time_limit_minutes >= 1 && body.time_limit_minutes <= 600)) return toast('Enter a time limit between 1 and 600 minutes.', 'warn');
     try {
       const r = await api.admin.quizSave(body, H());
       const isNew = !quizId;
@@ -184,6 +187,15 @@ async function openQuiz(panel, H, quizId, cats) {
             lab('Wrong answer', sel('negative_mark', [[0, 'No penalty'], [0.25, '−0.25 mark'], [0.33, '−0.33 mark'], [0.5, '−0.5 mark'], [1, '−1 mark']], Number(q.negative_mark))) +
             lab('Free sample questions', sel('free_preview_count', [0, 1, 2, 3, 4, 5].map((v) => [v, v === 0 ? 'None' : String(v)]), q.free_preview_count)) +
           '</div>' +
+          '<div class="rounded-xl border border-line p-4">' +
+            '<label class="flex items-start gap-3"><input type="checkbox" name="timed" class="mt-1 h-4 w-4 accent-primary"' + (q.time_limit_minutes ? ' checked' : '') + '>' +
+              '<span><span class="block text-sm font-semibold text-navy">Limit the time per attempt</span>' +
+              '<span class="block text-xs text-ink-muted">The countdown starts when a student starts and keeps running if they leave. At zero, their saved answers are submitted automatically.</span></span></label>' +
+            '<div class="mt-3 flex flex-wrap items-center gap-2' + (q.time_limit_minutes ? '' : ' hidden') + '" data-timebox>' +
+              '<input class="field w-28" name="time_limit_minutes" type="number" min="1" max="600" value="' + esc(q.time_limit_minutes || 180) + '"><span class="text-sm text-ink-muted">minutes</span>' +
+              [30, 60, 90, 120, 180].map((m) => '<button type="button" class="rounded-full border border-line px-3 py-1 text-xs font-semibold text-navy hover:border-primary" data-minutes="' + m + '">' + (m < 60 ? m + ' min' : (m % 60 ? Math.floor(m / 60) + ' h ' + (m % 60) + ' min' : (m / 60) + (m === 60 ? ' hour' : ' hours'))) + '</button>').join('') +
+            '</div>' +
+          '</div>' +
           '<div class="flex justify-end"><button class="btn-primary" type="submit">' + (D ? 'Save details' : 'Create quiz') + '</button></div>' +
         '</div>' +
         '<div class="card h-fit p-5"><p class="text-sm font-semibold text-navy">Cover image</p>' +
@@ -194,6 +206,8 @@ async function openQuiz(panel, H, quizId, cats) {
     const form = $('[data-details]', body);
     form.addEventListener('input', () => { dirty = true; });
     form.addEventListener('submit', (e) => { e.preventDefault(); saveDetails(); });
+    form.elements.timed.addEventListener('change', (e) => { $('[data-timebox]', body).classList.toggle('hidden', !e.target.checked); });
+    $$('[data-minutes]', body).forEach((b) => b.addEventListener('click', () => { form.elements.time_limit_minutes.value = b.dataset.minutes; dirty = true; }));
     $('[data-thumb-file]', body).addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;

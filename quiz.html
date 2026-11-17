@@ -46,6 +46,57 @@ function sample(q, i) {
   '</div>';
 }
 
+const tree = () => (d.chapters || []).length > 0;
+const allQuizzes = () => (d.chapters || []).flatMap((c) => (c.quizzes || []).map((q) => Object.assign({ chapter: c.title }, q)));
+
+/* The quiz the main button opens: one in progress, else the first not yet
+   taken, else the first one. Only quizzes this user may open. */
+function nextQuiz() {
+  const open = allQuizzes().filter((q) => !q.locked && q.question_count > 0);
+  return open.find((q) => q.in_progress) || open.find((q) => !q.attempts) || open[0] || null;
+}
+
+function quizRow(q) {
+  const ip = q.in_progress;
+  const facts = [plural(q.question_count, 'question'), q.time_limit_minutes ? '⏱ ' + timeLimit(q.time_limit_minutes) : 'No time limit'];
+  if (q.attempts) facts.push(plural(q.attempts, 'attempt') + ' · best ' + pct(q.best_percent));
+  let btn;
+  if (q.locked) btn = '<button class="btn-ghost btn-sm" data-locked="' + q.id + '">🔒 Locked</button>';
+  else if (!q.question_count) btn = '<span class="text-xs text-ink-muted">Coming soon</span>';
+  else if (ip) btn = '<button class="btn-primary btn-sm" data-test="' + q.id + '">Resume</button>';
+  else btn = '<button class="' + (q.attempts ? 'btn-ghost' : 'btn-primary') + ' btn-sm" data-test="' + q.id + '">' + (q.attempts ? 'Retake' : 'Start') + '</button>';
+  return '<li class="py-3">' +
+    '<div class="flex items-center gap-3">' +
+      '<div class="min-w-0 flex-1">' +
+        '<p class="flex flex-wrap items-center gap-2 font-semibold text-navy">' + fmt.esc(q.title) +
+          (q.is_free && !(d.access && d.access.has_access) ? '<span class="rounded bg-ok/10 px-1.5 py-0.5 text-[10px] font-black text-ok">FREE</span>' : '') + '</p>' +
+        (q.description ? '<p class="mt-0.5 text-sm text-ink-muted">' + fmt.esc(q.description) + '</p>' : '') +
+        '<p class="mt-0.5 text-xs text-ink-muted">' + facts.join(' · ') + (ip ? ' · <b class="text-warn">in progress (' + ip.answered + '/' + ip.total + ')</b>' : '') + '</p>' +
+      '</div>' +
+      '<div class="flex shrink-0 flex-col items-end gap-1">' + btn +
+        (q.last_attempt_id ? '<button class="text-xs font-semibold text-primary hover:underline" data-results="' + q.id + '">Results</button>' : '') +
+      '</div>' +
+    '</div>' +
+    '<div data-results-list="' + q.id + '"></div>' +
+  '</li>';
+}
+
+function chaptersBlock() {
+  const chapters = d.chapters || [];
+  const body = chapters.map((c, i) =>
+    '<details class="group rounded-xl border border-line"' + (i === 0 || chapters.length <= 3 ? ' open' : '') + '>' +
+      '<summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">' +
+        '<span class="flex items-center gap-2.5 font-bold text-navy"><svg class="h-5 w-5 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/></svg>' + fmt.esc(c.title) + '</span>' +
+        '<span class="text-sm text-ink-muted">' + plural(c.quizzes.length, 'quiz', 'quizzes') + '</span>' +
+      '</summary>' +
+      (c.description ? '<p class="px-4 text-sm text-ink-muted">' + fmt.esc(c.description) + '</p>' : '') +
+      '<ul class="divide-y divide-line px-4">' + c.quizzes.map(quizRow).join('') + '</ul>' +
+    '</details>').join('');
+  const sub = (d.access && d.access.has_access) ? 'Take each quiz as many times as you like. Every attempt is saved.'
+    : (d.free_quiz_count ? plural(d.free_quiz_count, 'quiz', 'quizzes') + ' free to try. Buy the course to unlock the rest.' : 'Buy the course to unlock every quiz.');
+  return block('Chapters & quizzes', '<div class="space-y-3">' + body + '</div>', sub);
+}
+
 function sidebar() {
   const a = d.access || {};
   const p = d.progress || {};
@@ -54,6 +105,11 @@ function sidebar() {
   let actions = '';
   if (!session.isLoggedIn) {
     actions = '<a class="btn-primary w-full" href="login.html?next=' + encodeURIComponent('quiz.html?id=' + id) + '">Sign in to ' + (free ? 'start' : 'buy') + '</a>';
+  } else if (tree()) {
+    const n = nextQuiz();
+    actions = n ? '<button class="btn-primary w-full" data-test="' + n.id + '">' + (n.in_progress ? 'Resume: ' : (n.attempts ? 'Practise: ' : 'Start: ')) + fmt.esc(n.title) + '</button>' : '';
+    if (!a.has_access) actions += '<button class="' + (n ? 'btn-ghost mt-2' : 'btn-primary') + ' w-full" data-buy>' + (a.owned ? 'Renew' : (free ? 'Get it free' : 'Buy course')) + (free ? '' : ' · ' + priceLine) + '</button>';
+    else if (a.can_renew) actions += '<button class="btn-ghost mt-2 w-full" data-buy>Renew · ' + priceLine + '</button>';
   } else if (a.has_access) {
     const ip = p.in_progress;
     actions = '<button class="btn-primary w-full" data-start>' + (ip ? 'Resume (' + ip.answered + '/' + ip.total + ' answered' + (ip.seconds_left != null ? ', ' + clock(ip.seconds_left) + ' left' : '') + ')' : (p.attempts ? 'Start new attempt' : 'Start quiz')) + '</button>' +
@@ -62,7 +118,16 @@ function sidebar() {
     actions = '<button class="btn-primary w-full" data-buy>' + (a.owned ? 'Renew' : (free ? 'Get it free' : 'Buy')) + (free ? '' : ' · ' + priceLine) + '</button>';
   }
   const label = accessLabel(a);
-  const progress = (a.owned && (p.attempts || p.in_progress)) ?
+  const progress = tree() ? ((p.attempts || p.in_progress) ?
+    '<div class="mt-5 border-t border-line pt-5">' +
+      '<p class="text-xs font-bold uppercase tracking-wider text-ink-muted">Your progress</p>' +
+      '<div class="mt-3 grid grid-cols-3 gap-2 text-center">' +
+        '<div class="rounded-lg bg-canvas p-2"><div class="text-lg font-black text-navy">' + (p.quizzes_done || 0) + '/' + (p.quiz_count || 0) + '</div><div class="text-[11px] text-ink-muted">Quizzes done</div></div>' +
+        '<div class="rounded-lg bg-canvas p-2"><div class="text-lg font-black text-navy">' + pct(p.average_best) + '</div><div class="text-[11px] text-ink-muted">Avg best</div></div>' +
+        '<div class="rounded-lg bg-canvas p-2"><div class="text-lg font-black text-navy">' + (p.attempts || 0) + '</div><div class="text-[11px] text-ink-muted">Attempts</div></div>' +
+      '</div>' +
+      (p.last ? '<a class="mt-3 block text-sm font-semibold text-primary hover:underline" href="quiz-result.html?attempt=' + encodeURIComponent(p.last.id) + '">View last result →</a>' : '') +
+    '</div>' : '') : (a.owned && (p.attempts || p.in_progress)) ?
     '<div class="mt-5 border-t border-line pt-5">' +
       '<p class="text-xs font-bold uppercase tracking-wider text-ink-muted">Your progress</p>' +
       '<div class="mt-3 grid grid-cols-3 gap-2 text-center">' +
@@ -83,10 +148,12 @@ function sidebar() {
       '<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>' +
       'Share</button>' +
     '<ul class="mt-5 space-y-2 text-sm text-ink-soft">' +
+      (tree() ? '<li>' + plural(d.chapter_count || d.chapters.length, 'chapter') + ' · ' + plural(d.quiz_count || allQuizzes().length, 'quiz', 'quizzes') + '</li>' : '') +
       '<li>' + plural(d.question_count || 0, 'question') + (d.total_marks ? ' · ' + d.total_marks + ' marks' : '') + '</li>' +
       '<li>Pass mark ' + d.pass_percent + '%</li>' +
       '<li>' + (Number(d.negative_mark) > 0 ? '−' + num(d.negative_mark) + ' mark per wrong answer' : 'No negative marking') + '</li>' +
-      '<li>' + (d.time_limit_minutes ? '<b class="text-navy">' + timeLimit(d.time_limit_minutes) + '</b> per attempt · submitted automatically at zero' : 'No time limit · progress saved') + '</li>' +
+      (tree() ? '<li>Unlimited retakes · every attempt saved</li>' :
+      '<li>' + (d.time_limit_minutes ? '<b class="text-navy">' + timeLimit(d.time_limit_minutes) + '</b> per attempt · submitted automatically at zero' : 'No time limit · progress saved') + '</li>') +
     '</ul>' + progress +
   '</div>';
 }
@@ -111,25 +178,29 @@ function render() {
             (d.subtitle ? '<p class="prose-brand mt-2">' + fmt.esc(d.subtitle) + '</p>' : '') +
             '<div class="mt-4 flex flex-wrap gap-2">' +
               fact(plural(d.question_count || 0, 'question')) +
-              (d.section_count ? fact(plural(d.section_count, 'section')) : '') +
+              (tree() ? fact(plural(d.chapter_count || d.chapters.length, 'chapter')) + fact(plural(d.quiz_count || allQuizzes().length, 'quiz', 'quizzes'))
+                : (d.section_count ? fact(plural(d.section_count, 'section')) : '') + fact(d.time_limit_minutes ? '⏱ ' + timeLimit(d.time_limit_minutes) : 'No time limit')) +
               fact('Pass ' + d.pass_percent + '%') +
-              fact(d.time_limit_minutes ? '⏱ ' + timeLimit(d.time_limit_minutes) : 'No time limit') +
               fact(Number(d.negative_mark) > 0 ? '−' + num(d.negative_mark) + ' per wrong' : 'No negative marking') +
               (d.buyers_count ? fact(d.buyers_count + ' enrolled') : '') +
             '</div>' +
+            (d.related ? '<a class="mt-4 inline-flex items-center gap-2 rounded-lg bg-chip px-3 py-2 text-sm font-semibold text-primary hover:underline" href="' + (d.related.type === 'book' ? 'book' : 'course') + '.html?id=' + encodeURIComponent(d.related.id) + '">' +
+              (d.related.type === 'book' ? '📘 Revises the book: ' : '🎬 Revises the video course: ') + fmt.esc(d.related.title) + ' →</a>' : '') +
           '</div></div>' +
+        (tree() ? chaptersBlock() : '') +
         block('What you get', '<ul class="space-y-2.5 text-[15px] text-ink">' +
           (d.highlights || []).map(check).join('') +
           check('Detailed answer and explanation for every question') +
           check('Section-wise and topic-wise score analysis') +
           check('AI review of what you missed and what to revise') +
           check('Your full result e-mailed to you') +
-          check('Unlimited attempts for 12 months; progress is saved') + '</ul>') +
+          check(tree() ? 'Quizzes chapter by chapter; retake each as often as you like for 12 months' : 'Unlimited attempts for 12 months; progress is saved') + '</ul>') +
         (d.description ? block('About this quiz', '<p class="prose-brand whitespace-pre-line">' + fmt.esc(d.description) + '</p>') : '') +
-        (inside ? block("What's inside", '<ul class="divide-y divide-line">' + inside + '</ul>') : '') +
+        (!tree() && inside ? block("What's inside", '<ul class="divide-y divide-line">' + inside + '</ul>') : '') +
         ((d.topics || []).length ? block('Topics covered', '<div class="flex flex-wrap gap-2">' + d.topics.map((t) => '<span class="rounded-md bg-chip px-2.5 py-1 text-sm text-navy">' + fmt.esc(t) + '</span>').join('') + '</div>') : '') +
         (!owned && (d.sample_questions || []).length ? block('Sample questions', '<div class="space-y-3">' + d.sample_questions.map(sample).join('') + '</div>', 'Answers and explanations are shown after you finish the test.') : '') +
-        block('How it works', '<p class="prose-brand whitespace-pre-line">' + fmt.esc(
+        block('How it works', '<p class="prose-brand whitespace-pre-line">' + fmt.esc(tree() ?
+          (d.instructions || 'The course is split into chapters, and each chapter has its own quizzes. Pick any quiz and answer in any order; flag questions to revisit and your answers save automatically. Some quizzes have a time limit: the timer starts when you begin and your saved answers are submitted when it reaches zero. After each quiz you get your score, every answer with its explanation, a topic-wise analysis and an optional AI review. Retake any quiz as often as you like.') :
           (d.time_limit_minutes ? 'You have ' + timeLimit(d.time_limit_minutes) + ' from the moment you start. The timer keeps running if you leave, and when it reaches zero your saved answers are submitted automatically.\n\n' : '') +
           (d.instructions || (d.time_limit_minutes
             ? 'Answer the questions in any order and flag any to revisit. Your answers save automatically. When you submit, you get your score, every correct answer with its explanation, a section-wise analysis and an optional AI review.'
@@ -149,6 +220,44 @@ function wire() {
   if (share) share.addEventListener('click', shareQuiz);
   const hist = $('[data-history]');
   if (hist) hist.addEventListener('click', showHistory);
+  document.querySelectorAll('[data-test]').forEach((b) => b.addEventListener('click', () => startTest(b.dataset.test, b)));
+  document.querySelectorAll('[data-locked]').forEach((b) => b.addEventListener('click', () => {
+    if (!session.isLoggedIn) { location.href = 'login.html?next=' + encodeURIComponent('quiz.html?id=' + id); return; }
+    toast('Buy the course to unlock this quiz.', 'info');
+    const buy = $('[data-buy]'); if (buy) buy.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }));
+  document.querySelectorAll('[data-results]').forEach((b) => b.addEventListener('click', () => showTestHistory(b.dataset.results)));
+}
+
+async function startTest(testId, b) {
+  if (busy) return;
+  if (!session.isLoggedIn) { location.href = 'login.html?next=' + encodeURIComponent('quiz.html?id=' + id); return; }
+  const q = allQuizzes().find((x) => x.id === testId);
+  if (!q) return;
+  if (!q.in_progress && q.time_limit_minutes && !confirm('"' + q.title + '" has a ' + timeLimit(q.time_limit_minutes) + ' time limit. The timer starts now and keeps running if you leave. Start?')) return;
+  busy = true;
+  b.disabled = true; b.textContent = 'Starting…';
+  try {
+    const s = await api.quizTestStart(testId, session.userId);
+    location.href = 'quiz-play.html?attempt=' + encodeURIComponent(s.attempt.id);
+  } catch (e) {
+    busy = false; render();
+    toast(e.message || 'Could not start the quiz.', 'error');
+  }
+}
+
+async function showTestHistory(testId) {
+  const box = document.querySelector('[data-results-list="' + testId + '"]');
+  if (box.innerHTML) { box.innerHTML = ''; return; }
+  box.innerHTML = '<div class="sk mt-2 h-14"></div>';
+  try {
+    const r = await api.quizTestAttempts(testId, session.userId);
+    const done = (r.items || []).filter((a) => a.status === 'submitted');
+    box.innerHTML = done.length ? '<ul class="mt-2 rounded-lg bg-canvas px-3 text-sm">' + done.map((a, i) =>
+      '<li><a class="flex items-center justify-between py-2 hover:text-primary" href="quiz-result.html?attempt=' + encodeURIComponent(a.id) + '">' +
+      '<span>Attempt ' + (done.length - i) + ' · ' + fmt.date(a.submitted_at) + '</span><span class="font-bold ' + (a.passed ? 'text-ok' : 'text-bad') + '">' + pct(a.percent) + '</span></a></li>').join('') + '</ul>'
+      : '<p class="mt-2 text-sm text-ink-muted">No finished attempts yet.</p>';
+  } catch (e) { box.innerHTML = '<p class="mt-2 text-sm text-bad">' + fmt.esc(e.message) + '</p>'; }
 }
 
 /* infumedz.shop links open the app when it is installed, and fall back to

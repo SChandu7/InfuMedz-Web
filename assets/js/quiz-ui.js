@@ -57,8 +57,8 @@ export function quizCard(q, opts = {}) {
   const owned = !!opts.owned;
   const free = Number(q.price) === 0;
   const meta = [
-    plural(q.question_count || 0, 'question'),
-    q.section_count ? plural(q.section_count, 'section') : '',
+    q.quiz_count ? plural(q.quiz_count, 'quiz', 'quizzes') : plural(q.question_count || 0, 'question'),
+    q.quiz_count && q.chapter_count ? plural(q.chapter_count, 'chapter') : (q.section_count ? plural(q.section_count, 'section') : ''),
   ].filter(Boolean).join(' · ');
   return '' +
     '<a href="quiz.html?id=' + encodeURIComponent(q.id) + '" class="card-hover group flex flex-col overflow-hidden">' +

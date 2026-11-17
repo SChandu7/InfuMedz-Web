@@ -88,7 +88,7 @@ $('[data-books]').innerHTML   = skeletonGrid(4);
 $('[data-quizzes]').innerHTML = skeletonGrid(4);
 
 function quizOwnedCard(q) {
-  const facts = [plural(q.question_count || 0, 'question')];
+  const facts = [q.quiz_count ? q.quizzes_done + '/' + q.quiz_count + ' quizzes done' : plural(q.question_count || 0, 'question')];
   if (q.attempts) facts.push('best ' + pct(q.best_percent), plural(q.attempts, 'attempt'));
   const label = accessLabel(q);
   const verb = q.expired ? 'Renew' : (q.in_progress ? 'Resume' : (q.attempts ? 'Practise again' : 'Start quiz'));

@@ -24,6 +24,7 @@
 <script type="module">
 import { api, ApiError } from './assets/js/api.js';
 import { session } from './assets/js/session.js';
+import { mountRevise } from './assets/js/revise.js';
 import { boot, fmt, stars, toast, emptyState } from './assets/js/ui.js';
 
 boot('courses.html');
@@ -355,6 +356,7 @@ function render() {
 
         '<div data-pane="curriculum" class="mt-5">' +
           '<div class="card overflow-hidden"><div data-list></div></div>' +
+          '<div data-revise></div>' +
         '</div>' +
 
         '<div data-pane="reviews" class="mt-5 hidden"><div class="card p-6">' + reviewsMarkup() + '</div></div>' +
@@ -405,6 +407,7 @@ function render() {
 
   renderPlayer();
   wireTabs();
+  mountRevise($('[data-revise]'), { courseId: id });
   wireBuy();
   wireReview();
 }

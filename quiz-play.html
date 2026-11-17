@@ -329,7 +329,7 @@ async function load() {
   elapsed = (S.attempt && S.attempt.time_spent_seconds) || 0;
   if (S.seconds_left != null) { deadline = new Date(Date.now() + S.seconds_left * 1000); tickTimer(); }
   document.title = S.quiz.title + ' — Quiz in progress';
-  $('[data-title]').textContent = S.quiz.title;
+  $('[data-title]').textContent = S.test && S.test.chapter_title ? S.test.chapter_title + ' · ' + S.quiz.title : S.quiz.title;
   if (!qs.length) { $('[data-question]').innerHTML = '<div class="card p-8 text-center text-ink-muted">This quiz has no questions yet.</div>'; return; }
   renderQuestion();
 }

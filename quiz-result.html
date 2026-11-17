@@ -116,13 +116,16 @@ function render() {
     flagged: R.review.filter((r) => r.flagged).length,
   };
   const labels = { all: 'All', wrong: 'Wrong', skipped: 'Skipped', correct: 'Correct', flagged: 'Flagged' };
+  const courseTitle = q.course_title || q.title;
+  const chapter = R.test && R.test.chapter_title ? R.test.chapter_title : '';
   document.title = 'Result: ' + q.title + ' — InfuMedz';
   $('[data-main]').innerHTML =
     '<nav class="mb-4 flex items-center gap-2 text-xs text-ink-muted"><a href="quizzes.html" class="hover:text-primary">MCQ Quizzes</a><span>/</span>' +
-      '<a href="quiz.html?id=' + encodeURIComponent(q.id) + '" class="line-1 hover:text-primary">' + fmt.esc(q.title) + '</a><span>/</span><span class="text-navy">Result</span></nav>' +
+      '<a href="quiz.html?id=' + encodeURIComponent(q.id) + '" class="line-1 hover:text-primary">' + fmt.esc(courseTitle) + '</a><span>/</span><span class="text-navy">Result</span></nav>' +
     '<div class="grid gap-6 lg:grid-cols-[1fr_360px]">' +
       '<div class="min-w-0 space-y-6">' +
         '<section class="card p-6">' +
+          (R.test ? '<p class="text-xs font-bold uppercase tracking-wider text-ink-muted">' + fmt.esc([chapter, courseTitle].filter(Boolean).join(' · ')) + '</p>' : '') +
           '<h1 class="text-xl sm:text-2xl">' + fmt.esc(q.title) + '</h1>' +
           '<p class="text-sm text-ink-muted">' + (R.attempt_number ? 'Attempt ' + R.attempt_number + ' · ' : '') + fmt.date(a.submitted_at) + (a.time_spent_seconds ? ' · ' + duration(a.time_spent_seconds) : '') + '</p>' +
           (a.auto_submitted ? '<p class="mt-3 rounded-lg bg-warn/10 px-3 py-2 text-sm font-semibold text-ink">⏱ Time ran out, so your saved answers were submitted automatically.</p>' : '') +
@@ -145,7 +148,8 @@ function render() {
       '</div>' +
       '<aside class="space-y-6">' +
         '<section class="card p-6"><div class="grid gap-2">' +
-          '<button class="btn-primary w-full" data-retake>Retake quiz</button>' +
+          '<button class="btn-primary w-full" data-retake>' + (R.test ? 'Retake this quiz' : 'Retake quiz') + '</button>' +
+          '<a class="btn-ghost w-full" href="quiz.html?id=' + encodeURIComponent(q.id) + '">All quizzes in this course</a>' +
           '<button class="btn-ghost w-full" data-email>' + (R.emailed_at ? 'E-mail result again' : 'E-mail me this result') + '</button>' +
           '<button class="btn-ghost w-full" onclick="window.print()">Print / save as PDF</button>' +
         '</div></section>' +
@@ -187,10 +191,10 @@ document.addEventListener('click', async (e) => {
   } else if (t.matches('[data-retake]')) {
     t.disabled = true; t.textContent = 'Starting…';
     try {
-      const s = await api.quizStart(R.quiz.id, session.userId);
+      const s = R.test ? await api.quizTestStart(R.test.id, session.userId) : await api.quizStart(R.quiz.id, session.userId);
       location.href = 'quiz-play.html?attempt=' + encodeURIComponent(s.attempt.id);
     } catch (err) {
-      t.disabled = false; t.textContent = 'Retake quiz';
+      t.disabled = false; t.textContent = R.test ? 'Retake this quiz' : 'Retake quiz';
       toast(err.message || 'Could not start a new attempt.', 'error');
     }
   }

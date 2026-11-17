@@ -134,6 +134,8 @@ export const api = {
   quizzes:      () => get('/api/infumedz/quizzes/'),
   quiz:         (id, uid) => get('/api/infumedz/quizzes/' + id + '/' + (uid ? '?user_id=' + uid : '')),
   quizStart:    (id, uid) => post('/api/infumedz/quizzes/' + id + '/start/', { user_id: uid }),
+  quizTestStart:    (tid, uid) => post('/api/infumedz/quizzes/test/' + tid + '/start/', { user_id: uid }),
+  quizTestAttempts: (tid, uid) => get('/api/infumedz/quizzes/test/' + tid + '/attempts/?user_id=' + uid),
   quizAttempts: (id, uid) => get('/api/infumedz/quizzes/' + id + '/attempts/?user_id=' + uid),
   quizAttempt:  (aid, uid) => get('/api/infumedz/quizzes/attempt/' + aid + '/?user_id=' + uid),
   quizSave:     (aid, d) => post('/api/infumedz/quizzes/attempt/' + aid + '/save/', d),
@@ -206,6 +208,9 @@ export const api = {
     quizQuestionSave:  (id, d, h) => post('/api/infumedz/admin/quizzes/' + id + '/question/save/', d, h),
     quizQuestionDelete:(qid, h) => post('/api/infumedz/admin/quizzes/question/' + qid + '/delete/', {}, h),
     quizArrange:       (id, d, h) => post('/api/infumedz/admin/quizzes/' + id + '/arrange/', d, h),
+    quizTestSave:      (id, d, h) => post('/api/infumedz/admin/quizzes/' + id + '/test/save/', d, h),
+    quizTestDelete:    (tid, h) => post('/api/infumedz/admin/quizzes/test/' + tid + '/delete/', {}, h),
+    quizTestMove:      (tid, d, h) => post('/api/infumedz/admin/quizzes/test/' + tid + '/move/', d, h),
     quizImport:        (id, d, h) => post('/api/infumedz/admin/quizzes/' + id + '/import/', d, h),
     quizGrant:         (d, h) => post('/api/infumedz/admin/quizzes/grant/', d, h),
 

@@ -4,9 +4,10 @@
  * paste-to-import for adding many questions at once. Backend: quiz_courses.py.
  *
  *   list      every quiz with status, questions, buyers, attempts, average
- *   quiz      Questions (sections + questions, ordering, move between
- *             sections), Details (cover, price, category, scoring, publish),
- *             Import (paste text), Access (grant 12 months to a user)
+ *   quiz      Chapters (course -> chapters -> quizzes -> questions: add,
+ *             order, move, per-quiz timer and free flag), Details (cover,
+ *             price, category, scoring, linked course/book, publish),
+ *             Import (paste text into a quiz), Access (grant 12 months)
  */
 
 import { api } from './api.js';
@@ -65,7 +66,7 @@ export async function renderQuizAdmin(panel, H) {
       '</div><button class="btn-primary btn-sm" data-new>+ New quiz</button></div>' +
       '<div class="mt-4 space-y-3">' + (shown.length ? shown.map(row).join('') :
         '<div class="card p-10 text-center"><p class="font-bold text-navy">' + (items.length ? 'No quizzes match this filter.' : 'No quiz courses yet') + '</p>' +
-        (items.length ? '' : '<p class="mt-1 text-sm text-ink-muted">Create a quiz, add sections and questions, then publish it. It appears on the website and in the app under MCQ Quizzes.</p>') + '</div>') + '</div>';
+        (items.length ? '' : '<p class="mt-1 text-sm text-ink-muted">Create a course, add chapters, quizzes and questions, then publish it. It appears on the website and in the app under MCQ Quizzes.</p>') + '</div>') + '</div>';
     $$('[data-filter]', panel).forEach((b) => b.addEventListener('click', () => { filter = b.dataset.filter; draw(); }));
     $('[data-new]', panel).addEventListener('click', () => openQuiz(panel, H, null, cats));
     $$('[data-open]', panel).forEach((b) => b.addEventListener('click', () => openQuiz(panel, H, b.dataset.open, cats)));
@@ -78,7 +79,7 @@ export async function renderQuizAdmin(panel, H) {
         '<div class="flex items-center gap-2"><p class="line-1 font-bold text-navy">' + esc(q.title) + '</p>' +
           '<span class="badge ' + (q.is_published ? 'bg-ok/10 text-ok' : 'bg-warn/15 text-ink') + '">' + (q.is_published ? 'PUBLISHED' : 'DRAFT') + '</span>' +
           (q.is_featured ? '<span class="badge bg-chip text-primary">ON HOME</span>' : '') + '</div>' +
-        '<p class="mt-0.5 text-sm text-ink-muted">' + esc(q.category_name) + ' · ' + (Number(q.price) === 0 ? 'Free' : fmt.price(q.price)) + ' · ' + q.question_count + ' questions · ' + q.section_count + ' sections' + (q.time_limit_minutes ? ' · ⏱ ' + q.time_limit_minutes + ' min' : '') + '</p>' +
+        '<p class="mt-0.5 text-sm text-ink-muted">' + esc(q.category_name) + ' · ' + (Number(q.price) === 0 ? 'Free' : fmt.price(q.price)) + ' · ' + (q.chapter_count || q.section_count || 0) + ' chapters · ' + (q.quiz_count || 0) + ' quizzes · ' + q.question_count + ' questions' + '</p>' +
         '<p class="text-xs text-ink-muted">' + q.buyers_count + ' buyers · ' + q.attempts + ' attempts' + (q.avg_percent != null ? ' · average ' + pct(q.avg_percent) : '') + '</p>' +
       '</div><span class="text-ink-muted">›</span></button>';
   }
@@ -91,7 +92,8 @@ export async function renderQuizAdmin(panel, H) {
 async function openQuiz(panel, H, quizId, cats) {
   if (!guard()) return;
   let tab = quizId ? 'questions' : 'details';
-  let D = null; // {quiz, sections, questions, categories}
+  let D = null; // {quiz, sections, tests, questions, categories, courses, books}
+  const openQuizzes = new Set();
 
   async function reload() {
     D = await api.admin.quizDetail(quizId, H());
@@ -100,7 +102,7 @@ async function openQuiz(panel, H, quizId, cats) {
 
   async function draw() {
     const q = D ? D.quiz : null;
-    const tabs = [['questions', 'Questions' + (D ? ' (' + D.questions.length + ')' : '')], ['details', 'Details'], ['import', 'Import'], ['access', 'Access']];
+    const tabs = [['questions', 'Chapters' + (D ? ' (' + D.sections.length + ')' : '')], ['details', 'Details'], ['import', 'Import'], ['access', 'Access']];
     panel.innerHTML =
       '<div class="flex flex-wrap items-center gap-3">' +
         '<button class="btn-ghost btn-sm" data-back>&larr; All quizzes</button>' +
@@ -143,27 +145,27 @@ async function openQuiz(panel, H, quizId, cats) {
       description: val('description').trim(), instructions: val('instructions').trim(),
       pass_percent: Number(val('pass_percent')), negative_mark: Number(val('negative_mark')),
       free_preview_count: Number(val('free_preview_count')),
-      time_limit_minutes: f.elements.timed.checked ? Number(val('time_limit_minutes')) : 0,
+      related_course_id: val('related_course_id') || null,
+      related_book_id: val('related_book_id') || null,
       is_featured: f.elements.featured.checked,
     } : {
       title: q.title, subtitle: q.subtitle, category_id: q.category_id, price: q.price, thumbnail_url: q.thumbnail_url,
       highlights: q.highlights, description: q.description, instructions: q.instructions,
       pass_percent: q.pass_percent, negative_mark: q.negative_mark, free_preview_count: q.free_preview_count,
-      time_limit_minutes: q.time_limit_minutes || 0,
+      related_course_id: q.related_course_id || null, related_book_id: q.related_book_id || null,
       is_featured: !!q.is_featured,
     };
     Object.assign(body, overrides || {});
     if (quizId) body.id = quizId;
     if (!('is_published' in body)) body.is_published = !!q.is_published;
     if (!body.title) return toast('Give the quiz a title.', 'warn');
-    if (f && f.elements.timed.checked && !(body.time_limit_minutes >= 1 && body.time_limit_minutes <= 600)) return toast('Enter a time limit between 1 and 600 minutes.', 'warn');
     try {
       const r = await api.admin.quizSave(body, H());
       const isNew = !quizId;
       quizId = r.item.id;
       dirty = false;
       await reload();
-      toast(isNew ? 'Quiz created. Now add sections and questions.' : ('is_published' in (overrides || {}) ? (body.is_published ? 'Published.' : 'Unpublished.') : 'Saved.'), 'success');
+      toast(isNew ? 'Course created. Now add chapters and quizzes.' : ('is_published' in (overrides || {}) ? (body.is_published ? 'Published.' : 'Unpublished.') : 'Saved.'), 'success');
       if (isNew) tab = 'questions';
       draw();
     } catch (e) { toast(e.message || 'Could not save.', 'error'); }
@@ -193,13 +195,11 @@ async function openQuiz(panel, H, quizId, cats) {
           '<label class="flex items-start gap-3 rounded-xl border border-line p-4"><input type="checkbox" name="featured" class="mt-1 h-4 w-4 accent-primary"' + (q.is_featured ? ' checked' : '') + '>' +
             '<span><span class="block text-sm font-semibold text-navy">Show in Popular Quizzes</span>' +
             '<span class="block text-xs text-ink-muted">Listed on the app and website home screens once published.</span></span></label>' +
-          '<div class="rounded-xl border border-line p-4">' +
-            '<label class="flex items-start gap-3"><input type="checkbox" name="timed" class="mt-1 h-4 w-4 accent-primary"' + (q.time_limit_minutes ? ' checked' : '') + '>' +
-              '<span><span class="block text-sm font-semibold text-navy">Limit the time per attempt</span>' +
-              '<span class="block text-xs text-ink-muted">The countdown starts when a student starts and keeps running if they leave. At zero, their saved answers are submitted automatically.</span></span></label>' +
-            '<div class="mt-3 flex flex-wrap items-center gap-2' + (q.time_limit_minutes ? '' : ' hidden') + '" data-timebox>' +
-              '<input class="field w-28" name="time_limit_minutes" type="number" min="1" max="600" value="' + esc(q.time_limit_minutes || 180) + '"><span class="text-sm text-ink-muted">minutes</span>' +
-              [30, 60, 90, 120, 180].map((m) => '<button type="button" class="rounded-full border border-line px-3 py-1 text-xs font-semibold text-navy hover:border-primary" data-minutes="' + m + '">' + (m < 60 ? m + ' min' : (m % 60 ? Math.floor(m / 60) + ' h ' + (m % 60) + ' min' : (m / 60) + (m === 60 ? ' hour' : ' hours'))) + '</button>').join('') +
+          '<div class="rounded-xl border border-line p-4"><p class="text-sm font-semibold text-navy">Revise with MCQs</p>' +
+            '<p class="text-xs text-ink-muted">Link this quiz course to a video course or book. It then shows on that page as "Revise with MCQs". Time limits are set per quiz in Chapters.</p>' +
+            '<div class="mt-3 grid gap-4 sm:grid-cols-2">' +
+              lab('Linked video course', sel('related_course_id', [['', 'None']].concat(((D && D.courses) || []).map((c) => [c.id, c.title])), q.related_course_id || '')) +
+              lab('Linked book', sel('related_book_id', [['', 'None']].concat(((D && D.books) || []).map((b) => [b.id, b.title])), q.related_book_id || '')) +
             '</div>' +
           '</div>' +
           '<div class="flex justify-end"><button class="btn-primary" type="submit">' + (D ? 'Save details' : 'Create quiz') + '</button></div>' +
@@ -212,8 +212,7 @@ async function openQuiz(panel, H, quizId, cats) {
     const form = $('[data-details]', body);
     form.addEventListener('input', () => { dirty = true; });
     form.addEventListener('submit', (e) => { e.preventDefault(); saveDetails(); });
-    form.elements.timed.addEventListener('change', (e) => { $('[data-timebox]', body).classList.toggle('hidden', !e.target.checked); });
-    $$('[data-minutes]', body).forEach((b) => b.addEventListener('click', () => { form.elements.time_limit_minutes.value = b.dataset.minutes; dirty = true; }));
+    form.addEventListener('change', () => { dirty = true; });
     $('[data-thumb-file]', body).addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -225,75 +224,146 @@ async function openQuiz(panel, H, quizId, cats) {
     });
   }
 
-  /* ── questions ── */
+  /* ── chapters, quizzes, questions ── */
 
-  function ordered(sections, qs) {
-    const out = qs.filter((x) => !x.section_id);
-    sections.forEach((s) => out.push(...qs.filter((x) => x.section_id === s.id)));
-    return out;
+  const tests = () => D.tests || [];
+  const chapterTitle = (sid) => ((D.sections.find((x) => x.id === sid) || {}).title || 'General');
+  const testLabel = (t) => chapterTitle(t.section_id) + ' › ' + t.title;
+  const mins = (m) => (m < 60 ? m + ' min' : (m % 60 ? Math.floor(m / 60) + ' h ' + (m % 60) + ' min' : (m / 60) + (m === 60 ? ' hour' : ' hours')));
+
+  /* Quizzes in chapter order, then questions grouped quiz by quiz. */
+  function orderedTests(sections, ts) {
+    const ids = new Set(sections.map((x) => x.id));
+    const out = [];
+    sections.forEach((sec) => out.push(...ts.filter((t) => t.section_id === sec.id)));
+    return out.concat(ts.filter((t) => !ids.has(t.section_id)));
+  }
+  function groupQuestions(ts, qs) {
+    const ids = new Set(ts.map((t) => t.id));
+    const out = [];
+    ts.forEach((t) => out.push(...qs.filter((x) => x.test_id === t.id)));
+    return out.concat(qs.filter((x) => !ids.has(x.test_id)));
   }
 
-  async function arrange(sections, qs) {
+  async function arrange(sections, ts, qs) {
+    const ot = orderedTests(sections, ts);
     try {
-      await api.admin.quizArrange(quizId, { sections: sections.map((s) => s.id), questions: qs.map((x) => ({ id: x.id, section_id: x.section_id || null })) }, H());
-      D.sections = sections; D.questions = qs;
-      draw();
-    } catch (e) { toast(e.message || 'Could not save the order.', 'error'); await reload(); draw(); }
+      await api.admin.quizArrange(quizId, {
+        sections: sections.map((x) => x.id),
+        tests: ot.map((t) => ({ id: t.id, section_id: t.section_id })),
+        questions: groupQuestions(ot, qs).map((x) => ({ id: x.id, test_id: x.test_id || null, section_id: x.section_id || null })),
+      }, H());
+    } catch (e) { toast(e.message || 'Could not save the order.', 'error'); }
+    await reload(); draw();
   }
 
   function questions(body) {
-    const secs = D.sections, qs = ordered(D.sections, D.questions);
-    const number = {};
-    qs.forEach((x, i) => { number[x.id] = i + 1; });
-    const general = qs.filter((x) => !x.section_id);
-    const group = (s, list, si) =>
-      '<div class="card overflow-hidden">' +
-        '<div class="flex flex-wrap items-center gap-2 border-b border-line bg-canvas px-4 py-2.5">' +
-          '<p class="flex-1 font-bold text-navy">' + esc(s ? s.title : 'General') + ' <span class="font-normal text-ink-muted">· ' + list.length + '</span></p>' +
-          '<button class="btn-ghost btn-sm" data-add="' + esc(s ? s.id : '') + '">+ Question</button>' +
-          (s ? (si > 0 ? '<button class="btn-ghost btn-sm" data-sup="' + si + '" title="Move section up">↑</button>' : '') +
-               (si < secs.length - 1 ? '<button class="btn-ghost btn-sm" data-sdown="' + si + '" title="Move section down">↓</button>' : '') +
-               '<button class="btn-ghost btn-sm" data-srename="' + esc(s.id) + '">Rename</button>' +
-               '<button class="rounded-lg px-2.5 py-1.5 text-sm text-bad hover:bg-bad/5" data-sdel="' + esc(s.id) + '">Remove</button>' : '') +
+    const secs = D.sections, ts = orderedTests(secs, tests());
+    const loose = D.questions.filter((x) => !ts.some((t) => t.id === x.test_id));
+    const quizBlock = (t, ti, list) => {
+      const qs = D.questions.filter((x) => x.test_id === t.id);
+      const facts = [qs.length + ' question' + (qs.length === 1 ? '' : 's'), t.time_limit_minutes ? '⏱ ' + mins(t.time_limit_minutes) : 'No time limit', t.attempts ? t.attempts + ' attempts' : ''].filter(Boolean).join(' · ');
+      return '<details class="border-t border-line" data-quiz="' + esc(t.id) + '"' + (openQuizzes.has(t.id) ? ' open' : '') + '>' +
+        '<summary class="flex cursor-pointer list-none flex-wrap items-center gap-2 px-4 py-2.5 hover:bg-canvas">' +
+          '<span class="text-ink-muted">▸</span>' +
+          '<span class="flex-1 font-semibold text-navy">' + esc(t.title) + (t.is_free ? ' <span class="badge bg-ok/10 text-ok">FREE</span>' : '') +
+            '<span class="block text-xs font-normal ' + (qs.length ? 'text-ink-muted' : 'text-warn') + '">' + esc(facts) + '</span></span>' +
+          '<button class="btn-ghost btn-sm" data-tadd-q="' + esc(t.id) + '">+ Question</button>' +
+          '<button class="btn-ghost btn-sm" data-tedit="' + esc(t.id) + '">Settings</button>' +
+          (ti > 0 ? '<button class="btn-ghost btn-sm" data-tup="' + esc(t.id) + '" title="Move quiz up">↑</button>' : '') +
+          (ti < list.length - 1 ? '<button class="btn-ghost btn-sm" data-tdown="' + esc(t.id) + '" title="Move quiz down">↓</button>' : '') +
+          (secs.length > 1 ? '<select class="rounded-md border border-line px-1.5 py-1 text-xs" data-tmove="' + esc(t.id) + '" title="Move to chapter">' +
+            secs.map((x) => '<option value="' + esc(x.id) + '"' + (x.id === t.section_id ? ' selected' : '') + '>' + esc(x.title) + '</option>').join('') + '</select>' : '') +
+          '<button class="rounded-lg px-2.5 py-1.5 text-sm text-bad hover:bg-bad/5" data-tdel="' + esc(t.id) + '">Delete</button>' +
+        '</summary>' +
+        '<div class="bg-canvas/40">' + (qs.length ? qs.map((x, i) => qrow(x, i + 1, i === 0, i === qs.length - 1)).join('') : '<p class="px-4 py-4 text-sm text-ink-muted">No questions yet.</p>') + '</div>' +
+      '</details>';
+    };
+    const chapter = (sec, si) => {
+      const list = ts.filter((t) => t.section_id === sec.id);
+      return '<div class="card overflow-hidden">' +
+        '<div class="flex flex-wrap items-center gap-2 bg-canvas px-4 py-2.5">' +
+          '<p class="flex-1 font-bold text-navy">' + esc(sec.title) + ' <span class="font-normal text-ink-muted">· ' + list.length + ' quiz' + (list.length === 1 ? '' : 'zes') + '</span></p>' +
+          '<button class="btn-ghost btn-sm" data-tnew="' + esc(sec.id) + '">+ Quiz</button>' +
+          (si > 0 ? '<button class="btn-ghost btn-sm" data-sup="' + si + '" title="Move chapter up">↑</button>' : '') +
+          (si < secs.length - 1 ? '<button class="btn-ghost btn-sm" data-sdown="' + si + '" title="Move chapter down">↓</button>' : '') +
+          '<button class="btn-ghost btn-sm" data-srename="' + esc(sec.id) + '">Rename</button>' +
+          '<button class="rounded-lg px-2.5 py-1.5 text-sm text-bad hover:bg-bad/5" data-sdel="' + esc(sec.id) + '">Remove</button>' +
         '</div>' +
-        (list.length ? list.map((x, i) => qrow(x, number[x.id], i === 0, i === list.length - 1)).join('') : '<p class="px-4 py-4 text-sm text-ink-muted">No questions yet.</p>') +
+        (list.length ? list.map((t, i) => quizBlock(t, i, list)).join('') : '<p class="border-t border-line px-4 py-4 text-sm text-ink-muted">No quizzes yet. <button class="font-semibold text-primary hover:underline" data-tnew="' + esc(sec.id) + '">Add the first quiz</button></p>') +
       '</div>';
+    };
     body.innerHTML =
-      '<div class="flex flex-wrap gap-2"><button class="btn-primary btn-sm" data-add="">+ Add question</button><button class="btn-ghost btn-sm" data-snew>+ Add section</button>' +
-      '<button class="btn-ghost btn-sm" data-goimport>Paste many questions</button></div>' +
-      (!D.quiz.is_published ? '<p class="mt-3 rounded-lg bg-warn/10 px-3 py-2 text-sm text-ink">Draft: students can\'t see this quiz yet. ' + (D.questions.length ? 'Publish it from the top bar when it\'s ready.' : 'Add questions, then publish.') + '</p>' : '') +
-      '<div class="mt-4 space-y-4">' + ((general.length || !secs.length) ? group(null, general, -1) : '') + secs.map((s, i) => group(s, qs.filter((x) => x.section_id === s.id), i)).join('') + '</div>';
+      '<div class="flex flex-wrap gap-2"><button class="btn-primary btn-sm" data-snew>+ Add chapter</button>' +
+      (secs.length ? '<button class="btn-ghost btn-sm" data-tnew="">+ Add quiz</button><button class="btn-ghost btn-sm" data-goimport>Paste many questions</button>' : '') + '</div>' +
+      '<p class="mt-2 text-xs text-ink-muted">Course › chapters › quizzes › questions. Buyers can retake every quiz as often as they like; each attempt is saved.</p>' +
+      (!D.quiz.is_published ? '<p class="mt-3 rounded-lg bg-warn/10 px-3 py-2 text-sm text-ink">Draft: students can\'t see this course yet. ' + (D.questions.length ? 'Publish it from the top bar when it\'s ready.' : 'Add a chapter, a quiz and its questions, then publish.') + '</p>' : '') +
+      (loose.length ? '<p class="mt-3 rounded-lg bg-warn/10 px-3 py-2 text-sm text-ink">' + loose.length + ' older question(s) aren\'t in a quiz yet. They\'re grouped into quizzes automatically when the server update runs.</p>' : '') +
+      '<div class="mt-4 space-y-4">' + (secs.length ? secs.map(chapter).join('') : '<div class="card p-10 text-center"><p class="font-bold text-navy">No chapters yet</p><p class="mt-1 text-sm text-ink-muted">Add a chapter (e.g. "Ch 12 - Heart failure"), then add two or more quizzes to it.</p></div>') + '</div>';
 
-    $$('[data-add]', body).forEach((b) => b.addEventListener('click', () => editor(null, b.dataset.add || null)));
-    $$('[data-edit]', body).forEach((b) => b.addEventListener('click', () => editor(D.questions.find((x) => x.id === b.dataset.edit))));
-    $('[data-goimport]', body).addEventListener('click', () => { tab = 'import'; draw(); });
+    $$('details[data-quiz]', body).forEach((el) => el.addEventListener('toggle', () => { if (el.open) openQuizzes.add(el.dataset.quiz); else openQuizzes.delete(el.dataset.quiz); }));
+    // Buttons inside <summary> must not toggle the quiz open/closed.
+    $$('summary button, summary select', body).forEach((el) => el.addEventListener('click', (e) => e.preventDefault()));
     $('[data-snew]', body).addEventListener('click', () => sectionDialog());
-    $$('[data-srename]', body).forEach((b) => b.addEventListener('click', () => sectionDialog(secs.find((s) => s.id === b.dataset.srename))));
+    const gi = $('[data-goimport]', body);
+    if (gi) gi.addEventListener('click', () => { tab = 'import'; draw(); });
+    $$('[data-tnew]', body).forEach((b) => b.addEventListener('click', () => quizDialog(null, b.dataset.tnew || (secs[0] && secs[0].id))));
+    $$('[data-tedit]', body).forEach((b) => b.addEventListener('click', () => quizDialog(tests().find((t) => t.id === b.dataset.tedit))));
+    $$('[data-tadd-q]', body).forEach((b) => b.addEventListener('click', () => { openQuizzes.add(b.dataset.taddQ); editor(null, b.dataset.taddQ); }));
+    $$('[data-edit]', body).forEach((b) => b.addEventListener('click', () => editor(D.questions.find((x) => x.id === b.dataset.edit))));
+    $$('[data-srename]', body).forEach((b) => b.addEventListener('click', () => sectionDialog(secs.find((x) => x.id === b.dataset.srename))));
     $$('[data-sdel]', body).forEach((b) => b.addEventListener('click', async () => {
-      const s = secs.find((x) => x.id === b.dataset.sdel);
-      if (!confirm('Remove section "' + s.title + '"? Its questions are kept and move to General.')) return;
-      try { const r = await api.admin.quizSectionDelete(s.id, H()); toast(r.message || 'Removed.', 'success'); await reload(); draw(); }
+      const sec = secs.find((x) => x.id === b.dataset.sdel);
+      const n = ts.filter((t) => t.section_id === sec.id).length;
+      if (n) return toast('Move or delete its ' + n + ' quiz' + (n === 1 ? '' : 'zes') + ' first.', 'warn');
+      if (!confirm('Remove the empty chapter "' + sec.title + '"?')) return;
+      try { await api.admin.quizSectionDelete(sec.id, H()); toast('Chapter removed.', 'success'); await reload(); draw(); }
       catch (e) { toast(e.message || 'Could not remove.', 'error'); }
     }));
-    const moveSec = (i, d) => { const s = secs.slice(); const [x] = s.splice(i, 1); s.splice(i + d, 0, x); arrange(s, ordered(s, D.questions)); };
+    const moveSec = (i, d) => { const s2 = secs.slice(); const [x] = s2.splice(i, 1); s2.splice(i + d, 0, x); arrange(s2, ts, D.questions); };
     $$('[data-sup]', body).forEach((b) => b.addEventListener('click', () => moveSec(Number(b.dataset.sup), -1)));
     $$('[data-sdown]', body).forEach((b) => b.addEventListener('click', () => moveSec(Number(b.dataset.sdown), 1)));
+    const moveT = (id, d) => {
+      const all = ts.slice();
+      const t = all.find((x) => x.id === id);
+      const grp = all.filter((x) => x.section_id === t.section_id);
+      const j = grp.indexOf(t) + d;
+      if (j < 0 || j >= grp.length) return;
+      const a = all.indexOf(t), b2 = all.indexOf(grp[j]);
+      [all[a], all[b2]] = [all[b2], all[a]];
+      arrange(secs, all, D.questions);
+    };
+    $$('[data-tup]', body).forEach((b) => b.addEventListener('click', () => moveT(b.dataset.tup, -1)));
+    $$('[data-tdown]', body).forEach((b) => b.addEventListener('click', () => moveT(b.dataset.tdown, 1)));
+    $$('[data-tmove]', body).forEach((el) => el.addEventListener('change', async () => {
+      try { await api.admin.quizTestMove(el.dataset.tmove, { section_id: el.value }, H()); toast('Quiz moved.', 'success'); }
+      catch (e) { toast(e.message || 'Could not move the quiz.', 'error'); }
+      await reload(); draw();
+    }));
+    $$('[data-tdel]', body).forEach((b) => b.addEventListener('click', async () => {
+      const t = tests().find((x) => x.id === b.dataset.tdel);
+      if (!confirm('Delete the quiz "' + t.title + '" and its ' + (t.question_count || 0) + ' question(s)? Past results still show them.')) return;
+      try { const r = await api.admin.quizTestDelete(t.id, H()); toast(r.message || 'Quiz deleted.', 'success'); await reload(); draw(); }
+      catch (e) { toast(e.message || 'Could not delete.', 'error'); }
+    }));
     const moveQ = (id, d) => {
-      const all = ordered(secs, D.questions);
+      const all = groupQuestions(ts, D.questions);
       const x = all.find((y) => y.id === id);
-      const grp = all.filter((y) => (y.section_id || null) === (x.section_id || null));
+      const grp = all.filter((y) => (y.test_id || null) === (x.test_id || null));
       const j = grp.indexOf(x) + d;
       if (j < 0 || j >= grp.length) return;
       const a = all.indexOf(x), b2 = all.indexOf(grp[j]);
       [all[a], all[b2]] = [all[b2], all[a]];
-      arrange(secs, all);
+      arrange(secs, ts, all);
     };
     $$('[data-qup]', body).forEach((b) => b.addEventListener('click', () => moveQ(b.dataset.qup, -1)));
     $$('[data-qdown]', body).forEach((b) => b.addEventListener('click', () => moveQ(b.dataset.qdown, 1)));
-    $$('[data-qsec]', body).forEach((s) => s.addEventListener('change', () => {
-      const moved = D.questions.map((x) => (x.id === s.dataset.qsec ? Object.assign({}, x, { section_id: s.value || null }) : x));
-      const x = moved.find((y) => y.id === s.dataset.qsec);
-      arrange(secs, ordered(secs, moved.filter((y) => y.id !== x.id).concat([x])));
+    $$('[data-qtest]', body).forEach((el) => el.addEventListener('change', () => {
+      const t = tests().find((y) => y.id === el.value);
+      const moved = D.questions.map((x) => (x.id === el.dataset.qtest ? Object.assign({}, x, { test_id: el.value, section_id: t ? t.section_id : null }) : x));
+      const x = moved.find((y) => y.id === el.dataset.qtest);
+      openQuizzes.add(el.value);
+      arrange(secs, ts, moved.filter((y) => y.id !== x.id).concat([x]));
     }));
     $$('[data-qdel]', body).forEach((b) => b.addEventListener('click', async () => {
       if (!confirm('Delete this question? New attempts won\'t include it; past results still show it.')) return;
@@ -306,36 +376,91 @@ async function openQuiz(panel, H, quizId, cats) {
     const st = x.stats;
     const meta = [TYPE_LABEL[x.question_type], x.topic, x.marks !== 1 ? x.marks + ' marks' : '', x.image_url ? 'image' : '',
       st && st.correct_pct != null ? st.correct_pct + '% correct (' + st.answered + ')' : ''].filter(Boolean).join(' · ');
-    return '<div class="flex items-start gap-3 border-b border-line px-4 py-3 last:border-0">' +
+    const ts = orderedTests(D.sections, tests());
+    return '<div class="flex items-start gap-3 border-t border-line px-4 py-3">' +
       '<span class="w-8 shrink-0 pt-0.5 text-sm font-bold text-ink-muted">' + n + '.</span>' +
       '<div class="min-w-0 flex-1"><button class="line-2 text-left text-sm font-medium text-ink hover:text-primary" data-edit="' + esc(x.id) + '">' + esc(x.question) + '</button>' +
         '<p class="mt-0.5 text-xs text-ink-muted">' + esc(meta) + (x.explanation ? '' : ' · <span class="font-semibold text-warn">no explanation</span>') + '</p></div>' +
       '<div class="flex shrink-0 items-center gap-1">' +
-        (D.sections.length ? '<select class="rounded-md border border-line px-1.5 py-1 text-xs" data-qsec="' + esc(x.id) + '" title="Section"><option value="">General</option>' +
-          D.sections.map((s) => '<option value="' + esc(s.id) + '"' + (s.id === x.section_id ? ' selected' : '') + '>' + esc(s.title) + '</option>').join('') + '</select>' : '') +
+        (ts.length > 1 ? '<select class="max-w-[11rem] rounded-md border border-line px-1.5 py-1 text-xs" data-qtest="' + esc(x.id) + '" title="Move to quiz">' +
+          ts.map((t) => '<option value="' + esc(t.id) + '"' + (t.id === x.test_id ? ' selected' : '') + '>' + esc(testLabel(t)) + '</option>').join('') + '</select>' : '') +
         (first ? '' : '<button class="rounded px-1.5 py-1 text-sm hover:bg-canvas" data-qup="' + esc(x.id) + '" title="Move up">↑</button>') +
         (last ? '' : '<button class="rounded px-1.5 py-1 text-sm hover:bg-canvas" data-qdown="' + esc(x.id) + '" title="Move down">↓</button>') +
         '<button class="rounded px-1.5 py-1 text-sm text-bad hover:bg-bad/5" data-qdel="' + esc(x.id) + '" title="Delete">✕</button>' +
       '</div></div>';
   }
 
-  async function sectionDialog(s) {
-    const title = prompt(s ? 'Rename section' : 'New section name (e.g. ECG, Paper 1)', s ? s.title : '');
+  async function sectionDialog(sec) {
+    const title = prompt(sec ? 'Rename chapter' : 'New chapter name (e.g. Ch 12 - Heart failure)', sec ? sec.title : '');
     if (title == null || !title.trim()) return;
-    try { await api.admin.quizSectionSave(quizId, { id: s ? s.id : undefined, title: title.trim(), description: s ? s.description : '' }, H()); await reload(); draw(); }
-    catch (e) { toast(e.message || 'Could not save the section.', 'error'); }
+    try {
+      const r = await api.admin.quizSectionSave(quizId, { id: sec ? sec.id : undefined, title: title.trim(), description: sec ? sec.description : '' }, H());
+      await reload();
+      if (!sec && r.section) { toast('Chapter added. Now add a quiz to it.', 'success'); return quizDialog(null, r.section.id); }
+      draw();
+    } catch (e) { toast(e.message || 'Could not save the chapter.', 'error'); }
+  }
+
+  /* Add or edit a quiz inside a chapter: name, chapter, timer, free. */
+  function quizDialog(t, chapterId) {
+    if (!guard()) return;
+    const body = $('[data-body]', panel);
+    const cur = t || { title: '', description: '', section_id: chapterId, time_limit_minutes: 0, is_free: false };
+    body.innerHTML =
+      '<form class="card max-w-2xl space-y-4 p-5" data-tform>' +
+        '<div class="flex items-center justify-between"><h3 class="text-lg">' + (t ? 'Quiz settings' : 'New quiz') + '</h3><button type="button" class="btn-ghost btn-sm" data-cancel>Cancel</button></div>' +
+        '<div class="grid gap-4 sm:grid-cols-2">' +
+          '<label class="block"><span class="mb-1.5 block text-sm font-semibold text-navy">Quiz name</span><input class="field" name="title" maxlength="200" value="' + esc(cur.title) + '" placeholder="e.g. Quiz 1, Mock test A"></label>' +
+          '<label class="block"><span class="mb-1.5 block text-sm font-semibold text-navy">Chapter</span><select class="field" name="section_id">' +
+            D.sections.map((x) => '<option value="' + esc(x.id) + '"' + (x.id === cur.section_id ? ' selected' : '') + '>' + esc(x.title) + '</option>').join('') + '</select></label>' +
+        '</div>' +
+        '<label class="block"><span class="mb-1.5 block text-sm font-semibold text-navy">Description (optional)</span><textarea class="field" name="description" rows="2">' + esc(cur.description || '') + '</textarea></label>' +
+        '<div class="rounded-xl border border-line p-4">' +
+          '<label class="flex items-start gap-3"><input type="checkbox" name="timed" class="mt-1 h-4 w-4 accent-primary"' + (cur.time_limit_minutes ? ' checked' : '') + '>' +
+            '<span><span class="block text-sm font-semibold text-navy">Time limit</span><span class="block text-xs text-ink-muted">The countdown starts when a student starts this quiz. At zero, their saved answers are submitted automatically.</span></span></label>' +
+          '<div class="mt-3 flex flex-wrap items-center gap-2' + (cur.time_limit_minutes ? '' : ' hidden') + '" data-timebox>' +
+            '<input class="field w-28" name="minutes" type="number" min="1" max="600" value="' + esc(cur.time_limit_minutes || 60) + '"><span class="text-sm text-ink-muted">minutes</span>' +
+            [15, 30, 60, 120, 180].map((m) => '<button type="button" class="rounded-full border border-line px-3 py-1 text-xs font-semibold text-navy hover:border-primary" data-minutes="' + m + '">' + mins(m) + '</button>').join('') +
+          '</div>' +
+        '</div>' +
+        '<label class="flex items-start gap-3 rounded-xl border border-line p-4"><input type="checkbox" name="free" class="mt-1 h-4 w-4 accent-primary"' + (cur.is_free ? ' checked' : '') + '>' +
+          '<span><span class="block text-sm font-semibold text-navy">Free quiz</span><span class="block text-xs text-ink-muted">Anyone signed in can take it without buying the course - a good taster.</span></span></label>' +
+        '<div class="flex justify-end"><button class="btn-primary" type="submit">' + (t ? 'Save quiz' : 'Create quiz') + '</button></div>' +
+      '</form>';
+    const f = $('[data-tform]', body);
+    f.addEventListener('input', () => { dirty = true; });
+    f.elements.timed.addEventListener('change', (e) => { $('[data-timebox]', body).classList.toggle('hidden', !e.target.checked); });
+    $$('[data-minutes]', body).forEach((b) => b.addEventListener('click', () => { f.elements.minutes.value = b.dataset.minutes; dirty = true; }));
+    $('[data-cancel]', body).addEventListener('click', () => { if (guard()) draw(); });
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const timed = f.elements.timed.checked, m = Number(f.elements.minutes.value);
+      if (!f.elements.title.value.trim()) return toast('Give the quiz a name.', 'warn');
+      if (timed && !(m >= 1 && m <= 600)) return toast('Enter a time limit between 1 and 600 minutes.', 'warn');
+      try {
+        const r = await api.admin.quizTestSave(quizId, {
+          id: t ? t.id : undefined, section_id: f.elements.section_id.value, title: f.elements.title.value.trim(),
+          description: f.elements.description.value.trim(), time_limit_minutes: timed ? m : 0, is_free: f.elements.free.checked,
+        }, H());
+        dirty = false;
+        if (r.test) openQuizzes.add(r.test.id);
+        await reload();
+        toast(t ? 'Quiz saved.' : 'Quiz created. Add its questions.', 'success');
+        if (!t && r.test) editor(null, r.test.id); else draw();
+      } catch (err) { toast(err.message || 'Could not save the quiz.', 'error'); }
+    });
   }
 
   /* ── question editor ── */
 
-  function editor(existing, sectionId) {
+  function editor(existing, testId) {
     if (!guard()) return;
     const st = existing ? {
-      id: existing.id, section_id: existing.section_id || '', type: existing.question_type, question: existing.question, image: existing.image_url || '',
+      id: existing.id, test_id: existing.test_id || '', type: existing.question_type, question: existing.question, image: existing.image_url || '',
       topic: existing.topic || '', marks: existing.marks || 1, explanation: existing.explanation || '',
       options: existing.options.map((o) => ({ id: o.id, text: o.text, correct: existing.correct_options.includes(o.id) })),
       accepted: (existing.accepted_answers || []).slice(),
-    } : { section_id: sectionId || '', type: 'single', question: '', image: '', topic: '', marks: 1, explanation: '', options: [{ text: '' }, { text: '' }, { text: '' }, { text: '' }], accepted: [] };
+    } : { test_id: testId || ((orderedTests(D.sections, tests())[0] || {}).id) || '', type: 'single', question: '', image: '', topic: '', marks: 1, explanation: '', options: [{ text: '' }, { text: '' }, { text: '' }, { text: '' }], accepted: [] };
     let saved = 0;
     const body = $('[data-body]', panel);
 
@@ -345,8 +470,8 @@ async function openQuiz(panel, H, quizId, cats) {
         '<div class="card space-y-5 p-5">' +
           '<div class="flex items-center justify-between"><h3 class="text-lg">' + (st.id ? 'Edit question' : 'New question') + '</h3><button class="btn-ghost btn-sm" data-cancel>Cancel</button></div>' +
           '<div class="grid gap-4 sm:grid-cols-3">' +
-            '<label class="block sm:col-span-2"><span class="mb-1.5 block text-sm font-semibold text-navy">Section</span><select class="field" data-f="section_id"><option value="">General</option>' +
-              D.sections.map((s) => '<option value="' + esc(s.id) + '"' + (s.id === st.section_id ? ' selected' : '') + '>' + esc(s.title) + '</option>').join('') + '</select></label>' +
+            '<label class="block sm:col-span-2"><span class="mb-1.5 block text-sm font-semibold text-navy">Quiz</span><select class="field" data-f="test_id">' +
+              orderedTests(D.sections, tests()).map((t) => '<option value="' + esc(t.id) + '"' + (t.id === st.test_id ? ' selected' : '') + '>' + esc(testLabel(t)) + '</option>').join('') + '</select></label>' +
             '<label class="block"><span class="mb-1.5 block text-sm font-semibold text-navy">Marks</span><select class="field" data-f="marks">' + [1, 2, 3, 4, 5].map((m) => '<option' + (m === st.marks ? ' selected' : '') + '>' + m + '</option>').join('') + '</select></label>' +
           '</div>' +
           '<div><span class="mb-1.5 block text-sm font-semibold text-navy">Answer type</span><div class="inline-flex overflow-hidden rounded-lg border border-line">' +
@@ -406,6 +531,7 @@ async function openQuiz(panel, H, quizId, cats) {
     }
 
     function problem() {
+      if (!st.test_id) return 'Choose the quiz this question belongs to (add a chapter and a quiz first).';
       if (!st.question.trim()) return 'Write the question.';
       if (st.type === 'text') return st.accepted.length ? '' : 'Add at least one accepted answer.';
       const filled = st.options.filter((o) => o.text.trim());
@@ -423,7 +549,7 @@ async function openQuiz(panel, H, quizId, cats) {
       if (p) return toast(p, 'warn');
       try {
         await api.admin.quizQuestionSave(quizId, {
-          id: st.id, section_id: st.section_id || null, question: st.question.trim(), question_type: st.type,
+          id: st.id, test_id: st.test_id, question: st.question.trim(), question_type: st.type,
           topic: st.topic.trim(), image_url: st.image, explanation: st.explanation.trim(), marks: st.marks,
           options: st.type === 'text' ? [] : st.options.filter((o) => o.text.trim()).map((o) => (o.id ? { id: o.id, text: o.text.trim(), correct: !!o.correct } : { text: o.text.trim(), correct: !!o.correct })),
           accepted_answers: st.type === 'text' ? st.accepted : [],
@@ -438,6 +564,7 @@ async function openQuiz(panel, H, quizId, cats) {
           $('[data-f="question"]', body).focus();
         } else {
           toast('Question saved.', 'success');
+          openQuizzes.add(st.test_id);
           draw();
         }
       } catch (e) { toast(e.message || 'Could not save.', 'error'); }
@@ -455,7 +582,7 @@ async function openQuiz(panel, H, quizId, cats) {
           '<p class="mt-1 text-sm text-ink-muted">Leave a blank line between questions. Mark correct options with * at the end. Several * = several answers. Use "Answer:" for a typed answer.</p>' +
           '<textarea class="field mt-3 font-mono text-sm" rows="16" data-paste placeholder="Q: Normal PR interval in adults?\nA) 120-200 ms *\nB) 40-80 ms\nC) 300 ms\nTopic: ECG basics\nExplanation: 0.12 to 0.20 seconds.\n\nQ: Drug of choice to terminate PSVT?\nAnswer: Adenosine | adenosine"></textarea>' +
           '<div class="mt-3 flex flex-wrap items-center gap-3">' +
-            '<label class="text-sm">Into section <select class="field ml-1 inline-block w-auto py-1.5" data-isec><option value="">General</option>' + D.sections.map((s) => '<option value="' + esc(s.id) + '">' + esc(s.title) + '</option>').join('') + '</select></label>' +
+            '<label class="text-sm">Into quiz <select class="field ml-1 inline-block w-auto py-1.5" data-isec>' + orderedTests(D.sections, tests()).map((t) => '<option value="' + esc(t.id) + '">' + esc(testLabel(t)) + '</option>').join('') + '</select></label>' +
             '<button class="btn-ghost btn-sm" data-preview>Check</button><button class="btn-primary btn-sm" data-import disabled>Import</button></div>' +
         '</div>' +
         '<div class="card h-fit p-5" data-result><p class="text-sm text-ink-muted">Paste questions and press Check to preview them here.</p></div>' +
@@ -475,7 +602,10 @@ async function openQuiz(panel, H, quizId, cats) {
     $('[data-import]', body).addEventListener('click', async (e) => {
       e.target.disabled = true;
       try {
-        const r = await api.admin.quizImport(quizId, { section_id: $('[data-isec]', body).value || null, questions: parsed }, H());
+        const into = $('[data-isec]', body).value;
+        if (!into) { e.target.disabled = false; return toast('Add a chapter and a quiz first.', 'warn'); }
+        const r = await api.admin.quizImport(quizId, { test_id: into, questions: parsed }, H());
+        openQuizzes.add(into);
         dirty = false;
         toast(r.message || 'Imported.', 'success');
         await reload(); tab = 'questions'; draw();

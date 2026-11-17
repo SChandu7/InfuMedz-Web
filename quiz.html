@@ -79,6 +79,9 @@ function sidebar() {
     '<p class="mt-1 text-sm ' + (a.expired || a.can_renew ? 'font-semibold text-warn' : 'text-ink-muted') + '">' +
       fmt.esc(label || '12 months access · unlimited attempts · web and app') + '</p>' +
     '<div class="mt-4">' + actions + '</div>' +
+    '<button class="btn-ghost mt-2 w-full" data-share>' +
+      '<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>' +
+      'Share</button>' +
     '<ul class="mt-5 space-y-2 text-sm text-ink-soft">' +
       '<li>' + plural(d.question_count || 0, 'question') + (d.total_marks ? ' · ' + d.total_marks + ' marks' : '') + '</li>' +
       '<li>Pass mark ' + d.pass_percent + '%</li>' +
@@ -142,8 +145,22 @@ function wire() {
   if (start) start.addEventListener('click', startQuiz);
   const buy = $('[data-buy]');
   if (buy) buy.addEventListener('click', checkout);
+  const share = $('[data-share]');
+  if (share) share.addEventListener('click', shareQuiz);
   const hist = $('[data-history]');
   if (hist) hist.addEventListener('click', showHistory);
+}
+
+/* infumedz.shop links open the app when it is installed, and fall back to
+   this page on the website otherwise. */
+async function shareQuiz() {
+  const url = 'https://infumedz.shop/quiz/' + encodeURIComponent(id);
+  const text = 'Practise this MCQ quiz on InfuMedz: ' + d.title;
+  if (navigator.share) {
+    try { await navigator.share({ title: d.title, text, url }); return; } catch (e) { if (e && e.name === 'AbortError') return; }
+  }
+  try { await navigator.clipboard.writeText(text + ' ' + url); toast('Link copied. Paste it anywhere to share.', 'success'); }
+  catch (_) { prompt('Copy this link:', url); }
 }
 
 async function showHistory() {

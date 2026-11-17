@@ -262,7 +262,7 @@ export function renderFooter() {
             '<li><a href="' + rel('support.html') + '" class="text-ink-soft hover:text-primary">Help Centre</a></li>' +
             '<li><a href="' + rel('about.html') + '" class="text-ink-soft hover:text-primary">About Us</a></li>' +
             '<li><a href="tel:+919381740718" class="text-ink-soft hover:text-primary">+91 93817 40718</a></li>' +
-            '<li><a href="mailto:infusionmedzzone@gmail.com" class="break-all text-ink-soft hover:text-primary">infusionmedzzone@gmail.com</a></li>' +
+            '<li><a href="mailto:support@infusionmedz.com" class="break-all text-ink-soft hover:text-primary">support@infusionmedz.com</a></li>' +
           '</ul>' +
         '</div>' +
         '<div>' +

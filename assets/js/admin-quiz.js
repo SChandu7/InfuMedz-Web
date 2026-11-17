@@ -76,7 +76,8 @@ export async function renderQuizAdmin(panel, H) {
       '<div class="h-16 w-24 shrink-0 overflow-hidden rounded-lg bg-chip">' + (q.thumbnail_url ? '<img src="' + esc(q.thumbnail_url) + '" alt="" class="h-full w-full object-cover">' : '') + '</div>' +
       '<div class="min-w-0 flex-1">' +
         '<div class="flex items-center gap-2"><p class="line-1 font-bold text-navy">' + esc(q.title) + '</p>' +
-          '<span class="badge ' + (q.is_published ? 'bg-ok/10 text-ok' : 'bg-warn/15 text-ink') + '">' + (q.is_published ? 'PUBLISHED' : 'DRAFT') + '</span></div>' +
+          '<span class="badge ' + (q.is_published ? 'bg-ok/10 text-ok' : 'bg-warn/15 text-ink') + '">' + (q.is_published ? 'PUBLISHED' : 'DRAFT') + '</span>' +
+          (q.is_featured ? '<span class="badge bg-chip text-primary">ON HOME</span>' : '') + '</div>' +
         '<p class="mt-0.5 text-sm text-ink-muted">' + esc(q.category_name) + ' · ' + (Number(q.price) === 0 ? 'Free' : fmt.price(q.price)) + ' · ' + q.question_count + ' questions · ' + q.section_count + ' sections' + (q.time_limit_minutes ? ' · ⏱ ' + q.time_limit_minutes + ' min' : '') + '</p>' +
         '<p class="text-xs text-ink-muted">' + q.buyers_count + ' buyers · ' + q.attempts + ' attempts' + (q.avg_percent != null ? ' · average ' + pct(q.avg_percent) : '') + '</p>' +
       '</div><span class="text-ink-muted">›</span></button>';
@@ -143,11 +144,13 @@ async function openQuiz(panel, H, quizId, cats) {
       pass_percent: Number(val('pass_percent')), negative_mark: Number(val('negative_mark')),
       free_preview_count: Number(val('free_preview_count')),
       time_limit_minutes: f.elements.timed.checked ? Number(val('time_limit_minutes')) : 0,
+      is_featured: f.elements.featured.checked,
     } : {
       title: q.title, subtitle: q.subtitle, category_id: q.category_id, price: q.price, thumbnail_url: q.thumbnail_url,
       highlights: q.highlights, description: q.description, instructions: q.instructions,
       pass_percent: q.pass_percent, negative_mark: q.negative_mark, free_preview_count: q.free_preview_count,
       time_limit_minutes: q.time_limit_minutes || 0,
+      is_featured: !!q.is_featured,
     };
     Object.assign(body, overrides || {});
     if (quizId) body.id = quizId;
@@ -187,6 +190,9 @@ async function openQuiz(panel, H, quizId, cats) {
             lab('Wrong answer', sel('negative_mark', [[0, 'No penalty'], [0.25, '−0.25 mark'], [0.33, '−0.33 mark'], [0.5, '−0.5 mark'], [1, '−1 mark']], Number(q.negative_mark))) +
             lab('Free sample questions', sel('free_preview_count', [0, 1, 2, 3, 4, 5].map((v) => [v, v === 0 ? 'None' : String(v)]), q.free_preview_count)) +
           '</div>' +
+          '<label class="flex items-start gap-3 rounded-xl border border-line p-4"><input type="checkbox" name="featured" class="mt-1 h-4 w-4 accent-primary"' + (q.is_featured ? ' checked' : '') + '>' +
+            '<span><span class="block text-sm font-semibold text-navy">Show in Popular Quizzes</span>' +
+            '<span class="block text-xs text-ink-muted">Listed on the app and website home screens once published.</span></span></label>' +
           '<div class="rounded-xl border border-line p-4">' +
             '<label class="flex items-start gap-3"><input type="checkbox" name="timed" class="mt-1 h-4 w-4 accent-primary"' + (q.time_limit_minutes ? ' checked' : '') + '>' +
               '<span><span class="block text-sm font-semibold text-navy">Limit the time per attempt</span>' +

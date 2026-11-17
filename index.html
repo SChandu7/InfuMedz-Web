@@ -206,6 +206,21 @@
   </div>
 </section>
 
+<!-- ════ QUIZZES (admin's "Show in Popular Quizzes" picks) ══ -->
+<section class="border-t border-line bg-canvas" data-quizzes-section hidden>
+  <div class="shell py-14">
+    <div class="mb-7 flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <p class="eyebrow">Practice</p>
+        <h2 class="mt-1.5 text-2xl sm:text-3xl">Popular MCQ quizzes</h2>
+        <p class="prose-brand mt-2 max-w-xl">Exam-style tests with every answer explained, a section-wise analysis and an AI review of what to revise.</p>
+      </div>
+      <a href="quizzes.html" class="btn-ghost btn-sm shrink-0">View all quizzes</a>
+    </div>
+    <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" data-quizzes></div>
+  </div>
+</section>
+
 <!-- ════ REVIEWS ═════════════════════════════════════════ -->
 <section class="border-t border-line bg-canvas" data-reviews-section hidden>
   <div class="shell py-14">
@@ -247,6 +262,7 @@
 import { api } from './assets/js/api.js';
 import { session } from './assets/js/session.js';
 import { boot, itemCard, skeletonGrid, fmt, stars, toast } from './assets/js/ui.js';
+import { quizCard } from './assets/js/quiz-ui.js';
 
 boot('index.html');
 const $ = (s) => document.querySelector(s);
@@ -485,6 +501,23 @@ async function load() {
 }
 
 load().catch((e) => toast(e.message || 'Could not load the catalogue.', 'error'));
+
+// Popular quizzes: loaded on their own so a problem here never affects the
+// rest of the home page. The section stays hidden when none are picked.
+(async () => {
+  try {
+    const all = await api.quizzes();
+    const featured = (all || []).filter((q) => q.is_featured)
+      .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)).slice(0, 4);
+    if (!featured.length) return;
+    let owned = new Set();
+    if (session.isLoggedIn) {
+      try { const lib = await api.library(session.userId); owned = new Set((lib.quizzes || []).filter((q) => q.has_access).map((q) => String(q.quiz_id))); } catch (_) {}
+    }
+    $('[data-quizzes]').innerHTML = featured.map((q) => quizCard(q, { owned: owned.has(String(q.id)) })).join('');
+    $('[data-quizzes-section]').hidden = false;
+  } catch (_) { /* optional section */ }
+})();
 </script>
 </body>
 </html>

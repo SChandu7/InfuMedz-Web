@@ -76,7 +76,9 @@ function buildFlat() {
         v: v,
         group: g.heading,
         n: n,
-        locked: !hasAccess && n >= FREE_PREVIEW,
+        // The admin's choice (is_free) wins; unset = the first FREE_PREVIEW are free.
+        free: typeof v.is_free === 'boolean' ? v.is_free : n < FREE_PREVIEW,
+        locked: !hasAccess && !(typeof v.is_free === 'boolean' ? v.is_free : n < FREE_PREVIEW),
         first: flat.filter((x) => x.group === g.heading).length === 0,
       });
       n++;
@@ -200,7 +202,7 @@ function listMarkup() {
         '</span>' +
         (f.locked
           ? '<span class="shrink-0 text-xs text-ink-muted">Locked</span>'
-          : (!hasAccess ? '<span class="badge-free shrink-0">Free</span>'
+          : (!hasAccess && f.free ? '<span class="badge-free shrink-0">Free</span>'
                         : '<svg class="h-4 w-4 shrink-0 text-ink-muted" viewBox="0 0 20 20" fill="currentColor"><path d="M6.3 3.8A1 1 0 0 0 4.8 4.7v10.6a1 1 0 0 0 1.5.9l8.4-5.3a1 1 0 0 0 0-1.7L6.3 3.8Z"/></svg>')) +
       '</button>';
   });
@@ -331,7 +333,7 @@ function render() {
               '<span>(' + (reviewData.total_reviews || 0) + ')</span></span>' +
             '<span>' + flat.length + ' lectures</span>' +
             (course.buyers_count ? '<span>' + course.buyers_count + ' enrolled</span>' : '') +
-            (hasAccess ? '' : '<span class="text-free">First ' + FREE_PREVIEW + ' free</span>') +
+            (hasAccess || !flat.some((f) => f.free) ? '' : '<span class="text-free">' + flat.filter((f) => f.free).length + ' free ' + 'lectures' + '</span>') +
           '</div>' +
         '</div>' +
       '</div>' +

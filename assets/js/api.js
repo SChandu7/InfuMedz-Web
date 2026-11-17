@@ -180,6 +180,8 @@ export const api = {
     arrangeBook:   (d, h) => post('/api/infumedz/book/content/arrange/', d, h),
     /* {kind: course_chapter|course_video|book_chapter|book_pdf, id, title} */
     renameContent: (d, h) => post('/api/infumedz/content/rename/', d, h),
+    /* {kind: course_video|book_pdf, id, is_free: true|false|null}; null = default rule */
+    setItemFree:   (d, h) => post('/api/infumedz/content/free/', d, h),
 
     replyCourseReview: (d, h) => post('/api/infumedz/admin/course-review/reply/', d, h),
     replyBookReview:   (d, h) => post('/api/infumedz/admin/book-review/reply/', d, h),

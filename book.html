@@ -77,7 +77,9 @@ function buildFlat() {
         v: v,
         group: g.heading,
         n: n,
-        locked: !hasAccess && n >= FREE_PREVIEW,
+        // The admin's choice (is_free) wins; unset = the first FREE_PREVIEW are free.
+        free: typeof v.is_free === 'boolean' ? v.is_free : n < FREE_PREVIEW,
+        locked: !hasAccess && !(typeof v.is_free === 'boolean' ? v.is_free : n < FREE_PREVIEW),
         first: flat.filter((x) => x.group === g.heading).length === 0,
       });
       n++;
@@ -214,7 +216,7 @@ function listMarkup() {
         '</span>' +
         (f.locked
           ? '<span class="shrink-0 text-xs text-ink-muted">Locked</span>'
-          : (!hasAccess ? '<span class="badge-free shrink-0">Free</span>'
+          : (!hasAccess && f.free ? '<span class="badge-free shrink-0">Free</span>'
                         : '<svg class="h-4 w-4 shrink-0 text-ink-muted" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 3a2 2 0 0 1 2-2h5.6L16 5.4V17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V3Zm7 .5V6h2.5L11 3.5Z" clip-rule="evenodd"/></svg>')) +
       '</button>';
   });
@@ -345,7 +347,7 @@ function render() {
               '<span>(' + (reviewData.total_reviews || 0) + ')</span></span>' +
             '<span>' + flat.length + ' PDFs</span>' +
             (book.buyers_count ? '<span>' + book.buyers_count + ' readers</span>' : '') +
-            (hasAccess ? '' : '<span class="text-free">First ' + FREE_PREVIEW + ' free</span>') +
+            (hasAccess || !flat.some((f) => f.free) ? '' : '<span class="text-free">' + flat.filter((f) => f.free).length + ' free ' + 'documents' + '</span>') +
           '</div>' +
         '</div>' +
       '</div>' +

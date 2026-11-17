@@ -162,7 +162,8 @@ export async function openContentManager({ kind, item, panel, H, onBack }) {
     const data = await K.load(st.id);
     st.title = data.title || st.title;
 
-    const toItem = (v) => ({ id: String(v.id), title: v.title || 'Untitled', url: v[K.urlKey] || '', order: v.order });
+    const toItem = (v) => ({ id: String(v.id), title: v.title || 'Untitled', url: v[K.urlKey] || '', order: v.order,
+                             is_free: typeof v.is_free === 'boolean' ? v.is_free : null });
     const flat = (data[K.listKey] || []).slice();
     st.maxOrder = flat.reduce((m, v) => Math.max(m, Number(v.order) || 0), 0);
 
@@ -231,7 +232,9 @@ export async function openContentManager({ kind, item, panel, H, onBack }) {
   /* ── render ───────────────────────────────────────────────────────── */
 
   function itemRow(it, pos) {
-    const free = pos <= FREE_PREVIEW;
+    // Admin's choice wins; unset = the first FREE_PREVIEW positions are free.
+    const free = it.is_free === true || (it.is_free == null && pos <= FREE_PREVIEW);
+    const freeLabel = it.is_free == null ? (free ? 'Free (default)' : 'Paid (default)') : (free ? 'Free' : 'Paid');
     return '' +
       '<li class="group flex items-center gap-2 bg-white px-2 py-2 sm:px-3" data-item="' + esc(it.id) + '">' +
         '<span class="dnd-handle cursor-grab touch-none rounded p-1 text-ink-muted hover:bg-chip hover:text-primary active:cursor-grabbing" ' +
@@ -242,7 +245,9 @@ export async function openContentManager({ kind, item, panel, H, onBack }) {
         '<span class="shrink-0 text-ink-muted">' + (kind === 'course' ? ICON.play : ICON.pdf) + '</span>' +
         '<span class="min-w-0 flex-1">' +
           '<span class="block break-words text-sm font-medium leading-snug text-navy line-clamp-2" data-title title="' + esc(it.title) + '">' + esc(it.title) + '</span>' +
-          (free ? '<span class="badge-free mt-0.5 whitespace-nowrap">Free preview</span>' : '') +
+          '<button type="button" class="mt-0.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold ' +
+            (free ? 'border-ok/40 bg-ok/10 text-ok' : 'border-line bg-canvas text-ink-muted') + '" data-free="' + esc(it.id) + '" ' +
+            'title="Choose whether this ' + K.item + ' is free or paid">' + freeLabel + ' &#9662;</button>' +
         '</span>' +
         '<span class="flex shrink-0 items-center">' +
           '<button type="button" class="rounded p-1.5 text-ink-soft hover:bg-chip hover:text-primary disabled:opacity-30" data-step="-1" data-id="' + esc(it.id) + '" aria-label="Move up"' + (pos === 1 ? ' disabled' : '') + '>' + ICON.up + '</button>' +
@@ -450,6 +455,11 @@ export async function openContentManager({ kind, item, panel, H, onBack }) {
       if (loc) rename(K.renameItemKind, loc.list[loc.index], K.item);
     }));
 
+    $$('[data-free]', panel).forEach((b) => b.addEventListener('click', () => {
+      const loc = locate(b.dataset.free);
+      if (loc) setFree(loc.list[loc.index]);
+    }));
+
     $$('[data-del-ch]', panel).forEach((b) => b.addEventListener('click', () => deleteChapter(b.dataset.delCh)));
     $$('[data-del-item]', panel).forEach((b) => b.addEventListener('click', () => deleteItem(b.dataset.delItem)));
 
@@ -526,6 +536,25 @@ export async function openContentManager({ kind, item, panel, H, onBack }) {
       toast('Renamed.', 'success');
       render();
     } catch (err) { toast(err.message || 'Could not rename.', 'error'); }
+  }
+
+  /** Free / paid / default for one item. Saved immediately (not part of the
+   *  order save), so it never mixes with unsaved drag changes. */
+  async function setFree(it) {
+    const answer = (prompt(
+      'Make "' + it.title + '":\n\n' +
+      '  1 = Free for everyone\n' +
+      '  2 = Paid (needs the ' + kind + ')\n' +
+      '  3 = Default (the first ' + FREE_PREVIEW + ' are free)\n\n' +
+      'Type 1, 2 or 3:', it.is_free === true ? '1' : (it.is_free === false ? '2' : '3')) || '').trim();
+    const value = { 1: true, 2: false, 3: null }[answer];
+    if (value === undefined) return;
+    try {
+      await api.admin.setItemFree({ kind: K.renameItemKind, id: it.id, is_free: value }, H());
+      it.is_free = value;
+      toast(value === true ? 'Now free for everyone.' : (value === false ? 'Now paid.' : 'Back to the default rule.'), 'success');
+      render();
+    } catch (err) { toast(err.message || 'Could not save.', 'error'); }
   }
 
   async function deleteItem(id) {

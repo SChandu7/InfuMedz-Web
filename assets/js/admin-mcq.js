@@ -125,6 +125,7 @@ async function openEditor(panel, H, existing, duplicate, lastPublish) {
     question: existing ? existing.question : '',
     topic: existing ? existing.topic || '' : '',
     image: existing ? existing.image_url || '' : '',
+    video: existing ? existing.video_url || '' : '',
     type: existing ? existing.question_type : 'single',
     options: existing && existing.question_type !== 'text'
       ? existing.options.map((o) => ({ id: duplicate ? null : o.id, text: o.text, correct: existing.correct_options.includes(o.id) }))
@@ -205,7 +206,13 @@ async function openEditor(panel, H, existing, duplicate, lastPublish) {
             '<input class="field mt-3" data-topic placeholder="Topic (optional), e.g. ECG, Heart failure" value="' + esc(st.topic) + '">' +
             '<div class="mt-3" data-image-box>' + (st.image
               ? '<div class="flex items-center gap-3"><img src="' + esc(st.image) + '" alt="" class="h-16 w-24 rounded-lg object-cover"><label class="btn-ghost btn-sm cursor-pointer">Change<input type="file" accept="image/*" class="hidden" data-img></label><button type="button" class="text-sm font-medium text-bad" data-img-del>Remove</button></div>'
-              : '<label class="btn-ghost btn-sm cursor-pointer">Add an image (ECG, echo, X-ray…)<input type="file" accept="image/*" class="hidden" data-img></label>') + '</div>') +
+              : '<label class="btn-ghost btn-sm cursor-pointer">Add an image (ECG, echo, X-ray…)<input type="file" accept="image/*" class="hidden" data-img></label>') + '</div>' +
+            '<div class="mt-3" data-video-box>' + (st.video
+              ? '<div class="flex flex-wrap items-center gap-3"><span class="grid h-16 w-24 place-items-center rounded-lg bg-navy text-2xl text-white">▶</span>' +
+                  '<a class="line-1 max-w-[14rem] text-sm text-primary hover:underline" target="_blank" rel="noopener" href="' + esc(st.video) + '">' + esc(st.video.split('/').pop()) + '</a>' +
+                  '<label class="btn-ghost btn-sm cursor-pointer">Change<input type="file" accept="video/*" class="hidden" data-vid></label><button type="button" class="text-sm font-medium text-bad" data-vid-del>Remove</button></div>'
+              : '<div class="flex flex-wrap items-center gap-2"><label class="btn-ghost btn-sm cursor-pointer">Add a video (echo, ECG…)<input type="file" accept="video/*" class="hidden" data-vid></label>' +
+                  '<button type="button" class="text-sm font-semibold text-primary hover:underline" data-vid-link>or paste a link</button></div>') + '</div>') +
           section('Answer type',
             '<div class="grid grid-cols-3 gap-2">' + [['single', 'One answer'], ['multiple', 'Several answers'], ['text', 'Typed answer']].map(([t, l]) =>
               '<button type="button" class="rounded-xl border px-2 py-3 text-sm font-bold ' + (st.type === t ? 'border-primary bg-chip text-primary' : 'border-line bg-white text-ink-soft') + '" data-type="' + t + '">' + l + '</button>').join('') + '</div>' +
@@ -312,6 +319,32 @@ async function openEditor(panel, H, existing, duplicate, lastPublish) {
     });
     const del = $('[data-img-del]', panel);
     if (del) del.addEventListener('click', () => { st.image = ''; dirty(); draw(); });
+    // Video: same signed upload as course lectures, with progress.
+    const vid = $('[data-vid]', panel);
+    vid.addEventListener('change', async () => {
+      const f = vid.files[0];
+      if (!f) return;
+      if (f.size > 200 * 1024 * 1024) return toast('That video is over 200 MB. Trim it to a short clip first.', 'warn');
+      const box = $('[data-video-box]', panel);
+      box.innerHTML = '<p class="text-sm text-ink-muted">Uploading video… <b data-vpct>0%</b></p>';
+      try {
+        const name = 'mcq_' + (f.name || 'clip.mp4').replace(/[^a-zA-Z0-9._-]/g, '_');
+        const ticket = await api.admin.presignVideo({ filename: name, content_type: f.type || 'video/mp4' }, H());
+        if (!ticket || !ticket.upload_url || !ticket.file_url) throw new Error('The server did not return an upload link.');
+        await api.admin.putFile(ticket.upload_url, f, (p) => { const el = $('[data-vpct]', panel); if (el) el.textContent = Math.round(p * 100) + '%'; });
+        st.video = ticket.file_url; dirty();
+      } catch (e) { toast(e.message || 'Could not upload the video.', 'error'); }
+      draw();
+    });
+    const vlink = $('[data-vid-link]', panel);
+    if (vlink) vlink.addEventListener('click', () => {
+      const url = (prompt('Video link (a direct video file or a YouTube link):', st.video || 'https://') || '').trim();
+      if (!url || url === 'https://') return;
+      if (!url.startsWith('https://')) return toast('The video link must start with https://', 'warn');
+      st.video = url; dirty(); draw();
+    });
+    const vdel = $('[data-vid-del]', panel);
+    if (vdel) vdel.addEventListener('click', () => { st.video = ''; dirty(); draw(); });
     $('[data-save]', panel).addEventListener('click', save);
     wireAnswers();
     wireSchedule();
@@ -342,6 +375,7 @@ async function openEditor(panel, H, existing, duplicate, lastPublish) {
       question_type: st.type,
       topic: st.topic.trim(),
       image_url: st.image,
+      video_url: st.video,
       explanation: st.explanation.trim(),
       options: st.type === 'text' ? [] : st.options.filter((o) => o.text.trim()).map((o) => Object.assign(o.id ? { id: o.id } : {}, { text: o.text.trim(), correct: o.correct })),
       accepted_answers: st.type === 'text' ? st.accepted : [],

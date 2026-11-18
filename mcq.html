@@ -68,6 +68,39 @@ function countdown(ms) {
   return s + 's';
 }
 const left = (iso) => iso ? new Date(iso).getTime() - (Date.now() + offset) : null;
+/* Uploaded clips play inline; YouTube links embed; anything else is a link. */
+function videoHtml(url) {
+  if (!url) return '';
+  const yt = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([\w-]{6,})/);
+  const box = (inner) => '<div class="mt-4 overflow-hidden rounded-xl2 border border-line bg-black">' + inner + '</div>';
+  if (yt) return box('<iframe class="aspect-video w-full" src="https://www.youtube-nocookie.com/embed/' + esc(yt[1]) + '" title="Question video" allow="encrypted-media; picture-in-picture" allowfullscreen loading="lazy"></iframe>');
+  if (/\/media\/|\.(mp4|m4v|mov|webm)(\?|$)/i.test(url)) {
+    return box('<video class="max-h-[420px] w-full" src="' + esc(url) + '" controls playsinline preload="metadata" controlslist="nodownload" oncontextmenu="return false"></video>');
+  }
+  return '<a class="btn-ghost btn-sm mt-4" href="' + esc(url) + '" target="_blank" rel="noopener">▶ Watch the video clip</a>';
+}
+
+/* The question and options (never the answer) with a link that opens the
+   app when installed, else this page. */
+function shareText(t) {
+  const q = t.question;
+  const won = t.answer && t.answer.is_correct === true;
+  const opts = q.question_type === 'text' ? '' : '\n\n' + q.options.map((o, i) => String.fromCharCode(65 + i) + ') ' + o.text).join('\n');
+  return (won ? "I got today's InfuMedz Daily MCQ right. Can you?" : "Today's InfuMedz Daily MCQ - can you answer it?") + '\n\n' + q.question.trim() + opts;
+}
+
+async function shareMcq() {
+  const t = today;
+  if (!t || !t.question) return;
+  const url = 'https://infumedz.shop/mcq/' + encodeURIComponent(t.question.id);
+  const text = shareText(t);
+  if (navigator.share) {
+    try { await navigator.share({ title: 'InfuMedz Daily MCQ', text, url }); return; } catch (e) { if (e && e.name === 'AbortError') return; }
+  }
+  try { await navigator.clipboard.writeText(text + '\n\nAnswer it here: ' + url); toast('Question and link copied. Paste it anywhere to share.', 'success'); }
+  catch (_) { prompt('Copy this link:', url); }
+}
+
 const typeLabel = (t) => t === 'multiple' ? 'Select all that apply' : t === 'text' ? 'Type your answer' : 'Choose one';
 
 /* ── load ── */
@@ -107,11 +140,15 @@ function draw() {
     '<div class="flex flex-wrap gap-2">' +
       '<span class="badge-cat">' + esc(q.topic || "Today's question") + '</span>' +
       '<span class="badge bg-canvas text-ink-soft">' + typeLabel(q.question_type) + '</span>' +
+      '<button type="button" class="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1 text-xs font-semibold text-primary hover:border-primary" data-share>' +
+        '<svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>' +
+        (answered && a && a.is_correct === true ? 'Challenge a friend' : 'Share') + '</button>' +
     '</div>' +
     '<p class="mt-4 whitespace-pre-line text-lg font-semibold leading-relaxed text-navy">' + esc(q.question) + '</p>' +
     (q.image_url ? '<a href="' + esc(q.image_url) + '" target="_blank" rel="noopener" class="mt-4 block overflow-hidden rounded-xl2 border border-line">' +
       '<img src="' + esc(q.image_url) + '" alt="Question image" class="max-h-[420px] w-full object-contain bg-white"></a>' +
       '<p class="mt-1 text-xs text-ink-muted">Click the image to open it full size.</p>' : '') +
+    videoHtml(q.video_url) +
     '<div class="mt-5 space-y-2">';
 
   if (q.question_type === 'text') {
@@ -193,6 +230,8 @@ function wireMain() {
   });
   const sub = $('[data-submit]');
   if (sub) sub.addEventListener('click', submit);
+  const sh = $('[data-share]');
+  if (sh) sh.addEventListener('click', shareMcq);
 }
 
 async function submit() {

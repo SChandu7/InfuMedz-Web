@@ -148,6 +148,7 @@
 
 <script type="module">
 import { session } from './assets/js/session.js';
+import { verifySignup } from './assets/js/signup-verify.js';
 import { boot, toast } from './assets/js/ui.js';
 
 boot('login.html');
@@ -284,10 +285,14 @@ $('[data-panel="signup"]').addEventListener('submit', async (e) => {
   if (!name || !email || !phone || !pw) return toast('Please fill in every field.', 'warn');
   if (pw.length < 6) return toast('Use at least 6 characters for your password.', 'warn');
   if (!/^\S+@\S+\.\S+$/.test(email)) return toast('That email address does not look right.', 'warn');
+  if (!/^(\+?91)?0?\d{10}$/.test(phone.replace(/[\s-]/g, ''))) return toast('Enter a valid 10-digit mobile number.', 'warn');
 
+  // Prove the e-mail or the mobile number before the account exists.
   busy(e.target, true);
+  const verification = await verifySignup({ email: email.toLowerCase(), phone });
+  if (!verification) return busy(e.target, false, 'Create account');
   try {
-    const r = await session.signup({ name, email, phone, password: pw });
+    const r = await session.signup({ name, email, phone, password: pw, verification });
     if (session.isLoggedIn) {
       toast('Account created. Welcome to InfuMedz.', 'success');
       location.href = next;

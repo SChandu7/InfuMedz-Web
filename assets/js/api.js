@@ -85,6 +85,9 @@ const del  = (p, h)    => request(p, { method: 'DELETE', headers: h });
 export const api = {
   /* Auth */
   signup:  (d) => post('/api/infumedz/signup/', d),
+  signupOtpEmailSend:   (email) => post('/api/infumedz/signup/otp/email/send/', { email }),
+  signupOtpEmailVerify: (challenge, code) => post('/api/infumedz/signup/otp/email/verify/', { challenge, code }),
+  signupOtpPhoneVerify: (firebase_token) => post('/api/infumedz/signup/otp/phone/verify/', { firebase_token }),
   login:   (identifier, password) => post('/api/infumedz/login/', { identifier, password }),
   google:  (idToken) => post('/api/infumedz/googleauth/', { id_token: idToken }),
   profile: (uid) => get('/api/infumedz/user/' + uid + '/'),
